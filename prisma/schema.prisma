@@ -1,0 +1,738 @@
+// DAC Developers — Booking Form Portal
+// Full data model. See PLAN.md §6 for the ER diagram and the rules this encodes.
+//
+// Conventions enforced here:
+//   * Money is BigInt PAISE. Never Float, never Decimal for currency.
+//   * All timestamps are DateTime @db.Timestamptz (UTC). Rendered IST in the UI.
+//   * organizationId on every core table from day one (multi-tenant ready, brief §11).
+//   * PAN / Aadhaar are stored ENCRYPTED (Bytes) with a plaintext *Last4 for lists only.
+//   * AuditLog is append-only — enforced by a trigger in a follow-up migration.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Prisma 7: the connection URL lives in prisma.config.ts (for migrate/introspect)
+// and is passed to PrismaClient via a driver adapter at runtime. See src/lib/db.ts.
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum RoleName {
+  ADMIN
+  SALES_EXECUTIVE
+  AGM
+  DGM_GM
+  VP_SALES
+  SALES_COORDINATOR
+  MIS
+  DIRECTOR
+  CRM
+}
+
+enum PropertyType {
+  VILLA
+  PLOT
+  APARTMENT
+}
+
+enum PaymentMode {
+  CHQ
+  CARD
+  ONLINE
+}
+
+enum PaymentSource {
+  OWN_FUNDS
+  HOME_LOAN
+}
+
+enum ApplicantType {
+  PRIMARY
+  SECONDARY
+}
+
+enum Salutation {
+  MR
+  MRS
+  MS
+}
+
+enum RelationType {
+  SON_OF
+  DAUGHTER_OF
+  WIFE_OF
+}
+
+enum AddressType {
+  COMMUNICATION
+  PERMANENT
+}
+
+enum FormStatus {
+  DRAFT
+  SUBMITTED
+  IN_REVIEW
+  RETURNED
+  COMPLETED
+  CANCELLED
+}
+
+enum StepAction {
+  SIGN
+  VALIDATE_AND_SIGN
+}
+
+enum StepStatus {
+  LOCKED
+  PENDING
+  SIGNED
+  VALIDATED
+  RETURNED
+  SKIPPED
+  REASSIGNED
+}
+
+enum DocumentScope {
+  FORM
+  APPLICANT
+}
+
+enum AuditAction {
+  CREATE
+  EDIT
+  UPLOAD
+  VIEW_SENSITIVE
+  SIGN
+  VALIDATE
+  RETURN
+  REASSIGN
+  SUBMIT
+  CANCEL
+  PDF
+  EXPORT
+  LOGIN
+  LOGIN_FAILED
+  LOGOUT
+  PASSWORD_RESET
+  SYNC
+}
+
+// ---------------------------------------------------------------------------
+// Tenancy, identity, access
+// ---------------------------------------------------------------------------
+
+model Organization {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now()) @db.Timestamptz
+
+  users          User[]
+  projects       Project[]
+  bookingForms   BookingForm[]
+  formTemplates  FormTemplate[]
+  documentTypes  DocumentType[]
+  tncVersions    TncVersion[]
+  auditLogs      AuditLog[]
+
+  @@map("organizations")
+}
+
+model Role {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        RoleName @unique
+  label       String // human label shown in the UI, e.g. "DGM / GM"
+  description String?
+  createdAt   DateTime @default(now()) @db.Timestamptz
+
+  users     User[]
+  flowSteps FlowStep[]
+
+  @@map("roles")
+}
+
+model User {
+  id             String  @id @default(uuid()) @db.Uuid
+  organizationId String  @map("organization_id") @db.Uuid
+  roleId         String  @map("role_id") @db.Uuid
+
+  email        String  @unique
+  name         String
+  passwordHash String  @map("password_hash")
+  phone        String?
+
+  isActive    Boolean   @default(true) @map("is_active")
+  lastLoginAt DateTime? @map("last_login_at") @db.Timestamptz
+
+  // Login throttling — see lib/auth/rate-limit.ts
+  failedLoginCount Int       @default(0) @map("failed_login_count")
+  lockedUntil      DateTime? @map("locked_until") @db.Timestamptz
+
+  mustChangePassword Boolean @default(false) @map("must_change_password")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  role         Role         @relation(fields: [roleId], references: [id])
+
+  sessions            Session[]
+  passwordResetTokens PasswordResetToken[]
+  createdForms        BookingForm[]        @relation("FormCreator")
+  assignedSteps       FormStepRecord[]     @relation("StepAssignee")
+  witnessedSteps      FormStepRecord[]     @relation("StepWitness")
+  uploadedDocuments   FormDocument[]       @relation("DocumentUploader")
+  auditLogs           AuditLog[]
+  notifications       Notification[]
+  signatureAssets     SignatureAsset[]
+
+  @@index([organizationId])
+  @@index([roleId])
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  // SHA-256 of the opaque cookie token. The raw token is never stored.
+  tokenHash String   @unique @map("token_hash")
+  expiresAt DateTime @map("expires_at") @db.Timestamptz
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  ip        String?
+  userAgent String?  @map("user_agent")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz
+  usedAt    DateTime? @map("used_at") @db.Timestamptz
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+// ---------------------------------------------------------------------------
+// Reference data
+// ---------------------------------------------------------------------------
+
+/// Projects are mastered in a Google Sheet and synced in (PLAN.md §2A).
+/// `externalCode` and `isActive` exist from this first migration even though
+/// the sync lands in Phase 7 — adding them later would mean reconciling
+/// hand-entered rows against sheet rows with no shared key.
+model Project {
+  id             String  @id @default(uuid()) @db.Uuid
+  organizationId String  @map("organization_id") @db.Uuid
+  externalCode   String? @map("external_code")
+  name           String
+  location       String?
+  isActive       Boolean @default(true) @map("is_active")
+
+  syncedAt  DateTime? @map("synced_at") @db.Timestamptz
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  bookingForms BookingForm[]
+
+  @@unique([organizationId, externalCode])
+  @@index([organizationId, isActive])
+  @@map("projects")
+}
+
+/// Admin-editable list behind the "Source" dropdown.
+model SourceOption {
+  id        String   @id @default(uuid()) @db.Uuid
+  value     String   @unique
+  label     String
+  sortOrder Int      @default(0) @map("sort_order")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@map("source_options")
+}
+
+/// A digitised paper form. One row for now ("Booking Form"), but the concept
+/// exists so other DAC forms can reuse the same engine (brief §11).
+model FormTemplate {
+  id             String  @id @default(uuid()) @db.Uuid
+  organizationId String  @map("organization_id") @db.Uuid
+  key            String
+  name           String
+  isActive       Boolean @default(true) @map("is_active")
+
+  flowTemplateId String @unique @map("flow_template_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  flowTemplate FlowTemplate  @relation(fields: [flowTemplateId], references: [id])
+  bookingForms BookingForm[]
+
+  @@unique([organizationId, key])
+  @@map("form_templates")
+}
+
+// ---------------------------------------------------------------------------
+// Configurable signature pipeline
+// ---------------------------------------------------------------------------
+
+model FlowTemplate {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  steps        FlowStep[]
+  formTemplate FormTemplate?
+  instances    FormFlowInstance[]
+
+  @@map("flow_templates")
+}
+
+/// One ordered step of the signature pipeline. Order and roles live in the DB
+/// so a new step (e.g. Sales Co-ordinator) needs no code change.
+model FlowStep {
+  id             String @id @default(uuid()) @db.Uuid
+  flowTemplateId String @map("flow_template_id") @db.Uuid
+  orderIndex     Int    @map("order_index")
+
+  label  String // as printed/shown, e.g. "DGM / GM"
+  roleId String @map("role_id") @db.Uuid
+  action StepAction @default(SIGN)
+
+  /// Step 2 only: skipped when the form has no second applicant.
+  skipIfNoSecondApplicant Boolean @default(false) @map("skip_if_no_second_applicant")
+
+  /// Applicant steps are performed in person on the creator's device, so they
+  /// are assigned to the form's creator, who is recorded as witness.
+  actsOnCreatorDevice Boolean @default(false) @map("acts_on_creator_device")
+
+  /// Which signature slot on the rendered PDF this step fills.
+  pdfSignatureSlot String @map("pdf_signature_slot")
+
+  flowTemplate FlowTemplate     @relation(fields: [flowTemplateId], references: [id], onDelete: Cascade)
+  role         Role             @relation(fields: [roleId], references: [id])
+  stepRecords  FormStepRecord[]
+
+  @@unique([flowTemplateId, orderIndex])
+  @@index([roleId])
+  @@map("flow_steps")
+}
+
+// ---------------------------------------------------------------------------
+// Supporting-document configuration
+// ---------------------------------------------------------------------------
+
+model DocumentType {
+  id             String        @id @default(uuid()) @db.Uuid
+  organizationId String        @map("organization_id") @db.Uuid
+  key            String
+  label          String
+  helpText       String?       @map("help_text")
+  scope          DocumentScope
+  /// For APPLICANT-scoped types: which applicant this instance belongs to.
+  appliesTo      ApplicantType? @map("applies_to")
+
+  acceptedMimeTypes String[] @map("accepted_mime_types")
+  maxBytes          Int      @default(10485760) @map("max_bytes") // 10 MB at the picker
+  sortOrder         Int      @default(0) @map("sort_order")
+  isActive          Boolean  @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  requirement  DocumentRequirement?
+  documents    FormDocument[]
+
+  @@unique([organizationId, key])
+  @@map("document_types")
+}
+
+/// When a document type is mandatory. Data-driven so the checklist changes
+/// without a deploy.
+model DocumentRequirement {
+  id             String  @id @default(uuid()) @db.Uuid
+  documentTypeId String  @unique @map("document_type_id") @db.Uuid
+  /// Always required.
+  isMandatory    Boolean @default(false) @map("is_mandatory")
+  /// Required only once a second applicant exists (OPEN_QUESTIONS Q11).
+  requiredIfSecondApplicant Boolean @default(false) @map("required_if_second_applicant")
+
+  documentType DocumentType @relation(fields: [documentTypeId], references: [id], onDelete: Cascade)
+
+  @@map("document_requirements")
+}
+
+// ---------------------------------------------------------------------------
+// Terms & conditions versioning
+// ---------------------------------------------------------------------------
+
+/// Each submitted form records the T&C version it was signed under.
+/// Never edited in place once a form references it — corrections make a new row.
+model TncVersion {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  version        String // "v1"
+  title          String
+  body           String    @db.Text
+  /// SHA-256 of `body`, so we can prove what was shown at signing time.
+  bodySha256     String    @map("body_sha256")
+  isApproved     Boolean   @default(false) @map("is_approved")
+  effectiveFrom  DateTime? @map("effective_from") @db.Timestamptz
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  bookingForms BookingForm[]
+
+  @@unique([organizationId, version])
+  @@map("tnc_versions")
+}
+
+// ---------------------------------------------------------------------------
+// The booking form itself
+// ---------------------------------------------------------------------------
+
+model BookingForm {
+  id             String  @id @default(uuid()) @db.Uuid
+  organizationId String  @map("organization_id") @db.Uuid
+  formTemplateId String  @map("form_template_id") @db.Uuid
+  createdById    String  @map("created_by_id") @db.Uuid
+
+  /// Allocated at SUBMIT, not at draft creation, so abandoned drafts do not
+  /// burn numbers and leave gaps finance would read as missing bookings.
+  bookingId String? @unique @map("booking_id")
+
+  // --- Header block (paper §1) ---
+  bookingDate     DateTime     @map("booking_date") @db.Date
+  projectId       String?      @map("project_id") @db.Uuid
+  propertyType    PropertyType? @map("property_type")
+  apartmentNo     String?      @map("apartment_no")
+  salesExecutive  String?      @map("sales_executive")
+  salesHead       String?      @map("sales_head")
+  telecaller      String?
+  leadId          String?      @map("lead_id")
+  source          String?
+
+  // --- Property details (paper §4) ---
+  builtUpAreaSqft Decimal? @map("built_up_area_sqft") @db.Decimal(10, 2)
+  udsSqft         Decimal? @map("uds_sqft") @db.Decimal(10, 2)
+  floor           String?
+
+  // --- Payment details (paper §5). Money is BigInt PAISE. ---
+  bookingAdvancePaise BigInt?        @map("booking_advance_paise")
+  paymentMode         PaymentMode?   @map("payment_mode")
+  paymentRefNo        String?        @map("payment_ref_no")
+  paymentDate         DateTime?      @map("payment_date") @db.Date
+  bank                String?
+  paymentSource       PaymentSource? @map("payment_source")
+  salePricePaise      BigInt?        @map("sale_price_paise")
+
+  // --- Remarks (paper §6) ---
+  remarks String? @db.Text
+
+  // --- Workflow state ---
+  status            FormStatus @default(DRAFT)
+  currentStepOrder  Int?       @map("current_step_order")
+  /// When a step returns the form, resubmission resumes HERE, not at step 1.
+  returnToStepOrder Int?       @map("return_to_step_order")
+
+  tncVersionId  String?   @map("tnc_version_id") @db.Uuid
+  tncAcceptedAt DateTime? @map("tnc_accepted_at") @db.Timestamptz
+
+  submittedAt DateTime? @map("submitted_at") @db.Timestamptz
+  completedAt DateTime? @map("completed_at") @db.Timestamptz
+  cancelledAt DateTime? @map("cancelled_at") @db.Timestamptz
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  formTemplate FormTemplate  @relation(fields: [formTemplateId], references: [id])
+  createdBy    User          @relation("FormCreator", fields: [createdById], references: [id])
+  project      Project?      @relation(fields: [projectId], references: [id])
+  tncVersion   TncVersion?   @relation(fields: [tncVersionId], references: [id])
+
+  applicants   Applicant[]
+  addresses    Address[]
+  documents    FormDocument[]
+  flowInstance FormFlowInstance?
+  pdfs         GeneratedPdf[]
+  auditLogs    AuditLog[]
+  mirrorJobs   SheetMirrorJob[]
+
+  @@index([organizationId, status])
+  @@index([createdById])
+  @@index([projectId])
+  @@index([leadId])
+  @@map("booking_forms")
+}
+
+model Applicant {
+  id            String        @id @default(uuid()) @db.Uuid
+  bookingFormId String        @map("booking_form_id") @db.Uuid
+  applicantType ApplicantType @map("applicant_type")
+
+  salutation         Salutation?
+  fullName           String?       @map("full_name") // stored UPPERCASE
+  relationType       RelationType? @map("relation_type")
+  guardianSalutation Salutation?   @map("guardian_salutation")
+  guardianName       String?       @map("guardian_name") // stored UPPERCASE
+
+  mobileNo    String? @map("mobile_no")
+  altMobileNo String? @map("alt_mobile_no")
+  email       String?
+
+  /// PAN and Aadhaar are regulated personal data: ciphertext only, plus a
+  /// last-4 that is the ONLY thing lists and tables may read.
+  panEncrypted     Bytes?  @map("pan_encrypted")
+  panLast4         String? @map("pan_last4")
+  aadhaarEncrypted Bytes?  @map("aadhaar_encrypted")
+  aadhaarLast4     String? @map("aadhaar_last4")
+
+  dob         DateTime? @db.Date
+  occupation  String?
+  companyName String?   @map("company_name")
+  designation String?
+  location    String?
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  bookingForm BookingForm    @relation(fields: [bookingFormId], references: [id], onDelete: Cascade)
+  documents   FormDocument[]
+
+  @@unique([bookingFormId, applicantType])
+  @@map("applicants")
+}
+
+model Address {
+  id            String      @id @default(uuid()) @db.Uuid
+  bookingFormId String      @map("booking_form_id") @db.Uuid
+  type          AddressType
+
+  // Four free lines, faithful to the paper (OPEN_QUESTIONS Q22).
+  line1 String?
+  line2 String?
+  line3 String?
+  line4 String?
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  bookingForm BookingForm @relation(fields: [bookingFormId], references: [id], onDelete: Cascade)
+
+  @@unique([bookingFormId, type])
+  @@map("addresses")
+}
+
+model FormDocument {
+  id             String  @id @default(uuid()) @db.Uuid
+  bookingFormId  String  @map("booking_form_id") @db.Uuid
+  documentTypeId String  @map("document_type_id") @db.Uuid
+  applicantId    String? @map("applicant_id") @db.Uuid
+
+  /// Storage key only — never the bytes. bookings/{bookingId}/documents/...
+  storageKey   String @map("storage_key")
+  originalName String @map("original_name")
+  mimeType     String @map("mime_type")
+  sizeBytes    Int    @map("size_bytes")
+  sha256       String?
+
+  uploadedById String   @map("uploaded_by_id") @db.Uuid
+  uploadedAt   DateTime @default(now()) @map("uploaded_at") @db.Timestamptz
+
+  bookingForm  BookingForm  @relation(fields: [bookingFormId], references: [id], onDelete: Cascade)
+  documentType DocumentType @relation(fields: [documentTypeId], references: [id])
+  applicant    Applicant?   @relation(fields: [applicantId], references: [id], onDelete: Cascade)
+  uploadedBy   User         @relation("DocumentUploader", fields: [uploadedById], references: [id])
+
+  @@index([bookingFormId])
+  @@index([documentTypeId])
+  @@map("form_documents")
+}
+
+// ---------------------------------------------------------------------------
+// Flow instance
+// ---------------------------------------------------------------------------
+
+model FormFlowInstance {
+  id             String   @id @default(uuid()) @db.Uuid
+  bookingFormId  String   @unique @map("booking_form_id") @db.Uuid
+  flowTemplateId String   @map("flow_template_id") @db.Uuid
+  startedAt      DateTime @default(now()) @map("started_at") @db.Timestamptz
+  completedAt    DateTime? @map("completed_at") @db.Timestamptz
+
+  bookingForm  BookingForm      @relation(fields: [bookingFormId], references: [id], onDelete: Cascade)
+  flowTemplate FlowTemplate     @relation(fields: [flowTemplateId], references: [id])
+  stepRecords  FormStepRecord[]
+
+  @@map("form_flow_instances")
+}
+
+model FormStepRecord {
+  id                 String @id @default(uuid()) @db.Uuid
+  formFlowInstanceId String @map("form_flow_instance_id") @db.Uuid
+  flowStepId         String @map("flow_step_id") @db.Uuid
+  orderIndex         Int    @map("order_index")
+
+  status StepStatus @default(LOCKED)
+
+  assigneeId String? @map("assignee_id") @db.Uuid
+  /// Applicant steps: the logged-in creator who supervised the in-person capture.
+  witnessUserId String? @map("witness_user_id") @db.Uuid
+
+  signatureAssetId String? @unique @map("signature_asset_id") @db.Uuid
+
+  validated Boolean @default(false)
+  /// Mandatory when the step returns the form.
+  comment   String? @db.Text
+
+  actedAt   DateTime? @map("acted_at") @db.Timestamptz
+  ip        String?
+  device    String?
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  flowInstance   FormFlowInstance @relation(fields: [formFlowInstanceId], references: [id], onDelete: Cascade)
+  flowStep       FlowStep         @relation(fields: [flowStepId], references: [id])
+  assignee       User?            @relation("StepAssignee", fields: [assigneeId], references: [id])
+  witnessUser    User?            @relation("StepWitness", fields: [witnessUserId], references: [id])
+  signatureAsset SignatureAsset?  @relation(fields: [signatureAssetId], references: [id])
+
+  @@unique([formFlowInstanceId, orderIndex])
+  @@index([assigneeId, status])
+  @@map("form_step_records")
+}
+
+model SignatureAsset {
+  id         String   @id @default(uuid()) @db.Uuid
+  /// bookings/{bookingId}/signatures/...
+  storageKey String   @map("storage_key")
+  mimeType   String   @default("image/png") @map("mime_type")
+  widthPx    Int?     @map("width_px")
+  heightPx   Int?     @map("height_px")
+  sha256     String?
+
+  /// Null for applicant signatures — applicants have no login.
+  signedByUserId String?  @map("signed_by_user_id") @db.Uuid
+  /// For applicant signatures: the name as captured on screen.
+  signerName     String?  @map("signer_name")
+  capturedAt     DateTime @default(now()) @map("captured_at") @db.Timestamptz
+
+  signedByUser User?           @relation(fields: [signedByUserId], references: [id])
+  stepRecord   FormStepRecord?
+
+  @@map("signature_assets")
+}
+
+model GeneratedPdf {
+  id            String   @id @default(uuid()) @db.Uuid
+  bookingFormId String   @map("booking_form_id") @db.Uuid
+  storageKey    String   @map("storage_key")
+  /// Write-once: PDFs are never overwritten, and the hash proves it.
+  sha256        String
+  sizeBytes     Int      @map("size_bytes")
+  generatedAt   DateTime @default(now()) @map("generated_at") @db.Timestamptz
+
+  bookingForm BookingForm @relation(fields: [bookingFormId], references: [id], onDelete: Cascade)
+
+  @@index([bookingFormId])
+  @@map("generated_pdfs")
+}
+
+// ---------------------------------------------------------------------------
+// Audit, notifications, outbound mirror
+// ---------------------------------------------------------------------------
+
+/// Append-only. A migration revokes UPDATE/DELETE and adds a guard trigger.
+model AuditLog {
+  id             String      @id @default(uuid()) @db.Uuid
+  organizationId String      @map("organization_id") @db.Uuid
+  bookingFormId  String?     @map("booking_form_id") @db.Uuid
+  userId         String?     @map("user_id") @db.Uuid
+  action         AuditAction
+
+  /// What changed. PAN/Aadhaar values are NEVER written here — only field names.
+  before Json?
+  after  Json?
+  detail String? @db.Text
+
+  at        DateTime @default(now()) @db.Timestamptz
+  ip        String?
+  userAgent String?  @map("user_agent")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  bookingForm  BookingForm? @relation(fields: [bookingFormId], references: [id])
+  user         User?        @relation(fields: [userId], references: [id])
+
+  @@index([organizationId, at])
+  @@index([bookingFormId])
+  @@index([userId])
+  @@map("audit_logs")
+}
+
+model Notification {
+  id     String  @id @default(uuid()) @db.Uuid
+  userId String  @map("user_id") @db.Uuid
+
+  title String
+  body  String  @db.Text
+  link  String?
+
+  readAt      DateTime? @map("read_at") @db.Timestamptz
+  emailSentAt DateTime? @map("email_sent_at") @db.Timestamptz
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@map("notifications")
+}
+
+/// One row per completed booking, mirrored to the Google Sheet.
+/// Retried on failure; never blocks the booking.
+model SheetMirrorJob {
+  id            String    @id @default(uuid()) @db.Uuid
+  bookingFormId String    @map("booking_form_id") @db.Uuid
+  attempts      Int       @default(0)
+  lastError     String?   @map("last_error") @db.Text
+  succeededAt   DateTime? @map("succeeded_at") @db.Timestamptz
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  bookingForm BookingForm @relation(fields: [bookingFormId], references: [id], onDelete: Cascade)
+
+  @@index([succeededAt])
+  @@map("sheet_mirror_jobs")
+}
+
+/// Gap-free Booking ID allocation, one row per (org, year).
+/// Incremented inside the submit transaction with a row lock.
+model BookingSequence {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  year           Int
+  lastValue      Int      @default(0) @map("last_value")
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@unique([organizationId, year])
+  @@map("booking_sequences")
+}

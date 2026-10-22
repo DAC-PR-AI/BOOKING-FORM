@@ -1,0 +1,52 @@
+@import 'tailwindcss';
+
+/*
+ * DAC brand palette, taken from the paper form:
+ *   navy  — the corner accent and section rules
+ *   orange— the secondary corner accent
+ *   ribbon— the grey section-header bands on the printed sheet
+ *
+ * Real brand values land with the logo files in /public/brand
+ * (OPEN_QUESTIONS: brand assets still outstanding).
+ */
+@theme {
+  --color-dac-navy-50: #eef1f8;
+  --color-dac-navy-100: #d3dcef;
+  --color-dac-navy-500: #2c3e8f;
+  --color-dac-navy-700: #1d2a66;
+  --color-dac-navy-900: #121a42;
+
+  --color-dac-orange-400: #f59345;
+  --color-dac-orange-500: #e8711a;
+  --color-dac-orange-600: #c75c0f;
+
+  --color-ribbon: #d9d9d9;
+  --color-ribbon-text: #1f2937;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background-color: #f4f5f7;
+  color: #111827;
+}
+
+/* The printed sheet is always light — don't invert the form replica. */
+@media print {
+  body {
+    background: #fff;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+}
