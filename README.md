@@ -33,6 +33,34 @@ npm run db:seed               # roles, demo users, document types, flow, T&C v1
 npm run dev                   # http://localhost:3000
 ```
 
+### The local development cluster
+
+This machine already had PostgreSQL 18 on port **5432** with a password we did not
+have, so development runs against a **separate cluster on port 5433** that was created
+for this project. The original 5432 server is untouched.
+
+| | |
+|---|---|
+| Data directory | `D:\OCT-2026\pgdata-dac` |
+| Port | **5433** |
+| Auth | `trust`, bound to `localhost` only — **development only, never production** |
+| Log | `D:\OCT-2026\pgdata-dac\server.log` |
+
+It is **not** a Windows service, so it does not start automatically after a reboot:
+
+```powershell
+$bin  = 'C:\Program Files\PostgreSQL\18\bin'
+$data = 'D:\OCT-2026\pgdata-dac'
+
+& "$bin\pg_ctl.exe" -D $data -l "$data\server.log" start   # start
+& "$bin\pg_ctl.exe" -D $data status                        # check
+& "$bin\pg_ctl.exe" -D $data stop                          # stop
+```
+
+If `npm run dev` reports it cannot reach the database, this server is almost certainly
+not running. To use your own PostgreSQL on 5432 instead, just point `DATABASE_URL` at it
+and re-run `npm run db:migrate && npm run db:seed`.
+
 ### Generating the two keys
 
 ```bash
