@@ -4,9 +4,19 @@ import { PUBLIC_PATHS, SESSION_COOKIE } from '@/lib/auth/constants';
 /**
  * ⚠️ DATA RESIDENCY BOUNDARY — read before editing.
  *
- * Vercel deploys Routing Middleware to ALL regions regardless of the `regions`
- * setting in vercel.json. Pinning the project to `bom1` (Mumbai) does NOT pin
- * middleware, so any code here may execute outside India.
+ * This file was `middleware.ts` until Next 16, which renamed the convention to
+ * `proxy.ts` and fixed its runtime to Node (the Edge runtime is not supported
+ * here and cannot be configured).
+ *
+ * Vercel documents Routing Middleware as deploying to ALL regions regardless of
+ * the `regions` setting in vercel.json — pinning the project to `bom1` (Mumbai)
+ * does NOT pin it. Whether the renamed Node-runtime `proxy` still behaves that
+ * way, or now runs at origin in `bom1`, is NOT settled: the Next 16 docs and
+ * Vercel's region docs disagree, and we have not yet confirmed it on a real
+ * deployment. Verify in Phase 8 by checking the function region in Vercel logs.
+ *
+ * Until that is confirmed, assume code here may execute OUTSIDE INDIA. The
+ * restriction below costs us nothing and is correct either way.
  *
  * Therefore this file may ONLY:
  *   * check whether a session cookie is PRESENT, and
@@ -22,7 +32,7 @@ import { PUBLIC_PATHS, SESSION_COOKIE } from '@/lib/auth/constants';
  * there and the user is bounced to /login.
  */
 
-export function middleware(request: NextRequest): NextResponse {
+export function proxy(request: NextRequest): NextResponse {
   const { pathname } = request.nextUrl;
 
   const isPublic = PUBLIC_PATHS.some(

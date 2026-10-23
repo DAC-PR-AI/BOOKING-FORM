@@ -198,9 +198,17 @@ flowchart TB
 Vercel deploys **Routing Middleware to all regions regardless of the `regions` setting** — pinning
 `bom1` does **not** pin middleware.
 
-> **Rule: `middleware.ts` may only check for the presence of a session cookie and redirect. It must
+> **Rule: `src/proxy.ts` may only check for the presence of a session cookie and redirect. It must
 > never decrypt a session, read the database, or touch a name, PAN, Aadhaar or any form field.**
 > All authorisation and all personal data stay inside `bom1` Server Actions and Route Handlers.
+
+**Update, Phase 1 (2026-10-23):** Next 16 renamed `middleware.ts` to **`proxy.ts`** and fixed its
+runtime to **Node** (Edge is not supported there and cannot be configured). Whether the renamed
+proxy still deploys to every region, or now runs at origin in `bom1`, is **not settled** — the
+Next 16 docs and Vercel's region docs disagree and no authoritative source confirms either. The
+rule above is kept unchanged, because it is correct under both readings and costs nothing.
+**Phase 8 must confirm the actual execution region from Vercel function logs** and record the
+answer here.
 
 Also enforced: `runtime = 'nodejs'` and `preferredRegion = 'bom1'` on every data route;
 `Cache-Control: private, no-store` on every authenticated response, so nothing lands in a CDN

@@ -148,10 +148,12 @@ All personal data must physically reside in **India**.
 * **Supabase project region must be `ap-south-1` (Mumbai).** Verify at creation; it cannot
   be changed afterwards.
 * **Vercel functions are pinned to `bom1`** in `vercel.json`.
-* **`src/middleware.ts` must stay a cookie-presence check only.** Vercel deploys Routing
-  Middleware to *all* regions regardless of the `regions` setting, so anything there may
-  run outside India. No DB reads, no session decryption, no personal data. The file carries
-  this warning in a header comment — please leave it there.
+* **`src/proxy.ts` must stay a cookie-presence check only.** (Next 16 renamed
+  `middleware.ts` → `proxy.ts`.) Vercel deploys Routing Middleware to *all* regions
+  regardless of the `regions` setting, so anything there may run outside India. Whether the
+  renamed Node-runtime proxy still does is unconfirmed — **Phase 8 must verify the actual
+  region in Vercel's function logs.** Until then: no DB reads, no session decryption, no
+  personal data. The file carries this warning in a header comment — please leave it there.
 * No third-party analytics or error tracker receives personal data. PAN and Aadhaar are
   redacted from audit payloads and logs by `src/lib/audit/redact.ts`, which is unit tested.
 
