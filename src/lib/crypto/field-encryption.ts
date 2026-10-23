@@ -63,6 +63,19 @@ export function decryptField(payload: Buffer | Uint8Array): string {
   return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8');
 }
 
+/**
+ * Prisma's `Bytes` column wants a Uint8Array backed by a plain ArrayBuffer.
+ * Node's Buffer is backed by ArrayBufferLike (possibly a SharedArrayBuffer),
+ * which the generated types reject, so copy into a plain one at the boundary.
+ */
+export function toDbBytes(buf: Buffer): Uint8Array<ArrayBuffer> {
+  // Allocating the ArrayBuffer explicitly is what pins the type — copying via
+  // `new Uint8Array(buf)` keeps Buffer's ArrayBufferLike and still fails.
+  const out = new Uint8Array(new ArrayBuffer(buf.byteLength));
+  out.set(buf);
+  return out;
+}
+
 /** Last 4 characters, for lists and tables — the only form safe to render by default. */
 export function last4(value: string): string {
   return value.slice(-4);

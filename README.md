@@ -4,8 +4,13 @@ Digitises the DAC Developers paper **Booking Form** (page 1) and **Terms & Condi
 Provisional Allotment** (page 2), with supporting-document upload and a sequential
 nine-step signature workflow.
 
-**Status: Phase 1 of 8 complete** — project setup, data model, authentication, RBAC, app
-shell, admin project CRUD. See `PLAN.md` §10 for the full phase plan.
+**Status: Phase 2 of 8 complete.**
+
+* **Phase 1** — project setup, data model, authentication, RBAC, app shell, admin project CRUD.
+* **Phase 2** — the digital booking form: all paper fields in order, the boxed character
+  inputs, shared Zod validation, debounced autosave, and the My Forms list.
+
+See `PLAN.md` §10 for the full phase plan. Next: Phase 3, supporting documents.
 
 | Document | What's in it |
 |---|---|
@@ -156,6 +161,26 @@ All personal data must physically reside in **India**.
   personal data. The file carries this warning in a header comment — please leave it there.
 * No third-party analytics or error tracker receives personal data. PAN and Aadhaar are
   redacted from audit payloads and logs by `src/lib/audit/redact.ts`, which is unit tested.
+
+## The booking form (Phase 2)
+
+`/forms` → **New booking form** → creates a draft → `/forms/{id}/edit`.
+
+* **Autosave** is debounced at 1.2 s; the header shows *"All changes saved at HH:MM:SS"*.
+  Navigating away with an unsaved change triggers the browser's confirm prompt.
+* **`<BoxInput>`** renders the printed character squares and is used at four lengths —
+  mobile 10, alternate mobile 10, Adhaar 12, D.O.B 8 (as four visual pairs). Auto-advance,
+  backspace steps back, arrow keys move, and pasting a whole number fills from the caret.
+* **Validation lives in `src/lib/validation/booking-form.ts`** and is shared by client and
+  server. Two levels on purpose: `draftSchema` accepts anything half-typed, `submitSchema`
+  is the real gate (Phase 4). The server always re-parses; the client copy is convenience.
+* **Aadhaar uses the Verhoeff checksum**, not just a length test — it catches the adjacent
+  transposition a hand-typed card invites. PAN accepts company and HUF holder types, not
+  just individual.
+* **PAN and Aadhaar are encrypted as soon as they are valid**, and are **not decrypted back
+  into the editor**. Reopening a draft shows those two boxes blank by design; re-enter to
+  change them. Every other field repopulates.
+* Money is parsed to **BigInt paise** on the way in and never touches a float.
 
 ## Security notes
 
