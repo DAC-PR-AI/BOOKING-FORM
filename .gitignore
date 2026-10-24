@@ -27,3 +27,6 @@ coverage/
 
 # local backups produced by scripts/backup.ts
 backups/
+
+# agent tooling — local skill links, resolved from .agents/
+.claude/
