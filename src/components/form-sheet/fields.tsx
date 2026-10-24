@@ -218,12 +218,71 @@ export function TickGroup({
   );
 }
 
-/** The photo box printed on the left of each applicant block. */
-export function PhotoBox({ caption }: { caption: string }) {
+/**
+ * The photo box printed on the left of each applicant block.
+ *
+ * Filled from the applicant's uploaded passport photograph, so the editor
+ * shows what the printed form will show. Empty, it is a link into the
+ * supporting-documents checklist rather than a second upload control — one
+ * place to manage attachments is enough, and the checklist is the one that
+ * knows what is still outstanding.
+ */
+export function PhotoBox({
+  caption,
+  documentId,
+  manageHref,
+}: {
+  caption: string;
+  /** The uploaded photograph, if there is one. */
+  documentId?: string | null;
+  /** Where "Add" goes. Omitted when the form is read-only. */
+  manageHref?: string;
+}) {
+  const frame =
+    'flex h-36 w-28 shrink-0 flex-col items-center justify-center overflow-hidden border border-gray-400 bg-gray-50 text-center';
+
+  if (documentId) {
+    return (
+      <a
+        href={`/api/documents/${documentId}`}
+        target="_blank"
+        rel="noreferrer"
+        className={`${frame} group relative`}
+        title={`${caption} — click to open`}
+      >
+        {/*
+          A plain <img>, deliberately, not next/image. The optimiser would
+          fetch and cache these bytes on Vercel's image CDN, which is outside
+          India and is exactly what the residency rule forbids (brief §3).
+          The src is a route that authorises, audits and redirects to a
+          short-lived signed URL.
+        */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={`/api/documents/${documentId}`}
+          alt={caption}
+          className="h-full w-full object-cover"
+        />
+        <span className="absolute inset-x-0 bottom-0 bg-black/55 py-0.5 text-[9px] text-white opacity-0 transition group-hover:opacity-100">
+          Open
+        </span>
+      </a>
+    );
+  }
+
   return (
-    <div className="flex h-36 w-28 shrink-0 flex-col items-center justify-center border border-gray-400 bg-gray-50 p-2 text-center">
+    <div className={`${frame} gap-2 p-2`}>
       <span className="text-[10px] leading-tight text-gray-500">{caption}</span>
-      <span className="mt-2 text-[10px] text-gray-400">Upload in Phase 3</span>
+      {manageHref ? (
+        <a
+          href={manageHref}
+          className="text-[10px] font-medium text-dac-navy-700 underline underline-offset-2"
+        >
+          Add photo
+        </a>
+      ) : (
+        <span className="text-[10px] text-gray-400">Not attached</span>
+      )}
     </div>
   );
 }

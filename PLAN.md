@@ -528,6 +528,11 @@ Estimates in working days, one engineer.
 | 1 | Setup, Prisma schema + migrations, seed (users per role, doc types, flow template, T&C v1), **`Project` table + admin CRUD** (sync deferred, §2A), Auth.js, RBAC, shell layout, `bom1` pinning, health cron | 4–5 d | log in as every role; each lands on the right home; wrong role gets 404; add a project by hand | Q9 |
 | 2 | The form replica: all fields, `BoxInput`, auto-uppercase, Zod validation, autosave draft, My Forms list | 5–6 d | create and save a draft; refresh loses nothing; validation fires | **images**, Q3, Q4 |
 | 3 | Documents: data-driven checklist, signed-URL direct upload, client compression, preview/replace, photo boxes wired into the sheet | 3–4 d | upload, preview, replace; oversize rejected; submit blocked while a mandatory doc is missing | Q2, Q13 |
+
+**Phases 1–3 are complete.** Phase 3 added a storage-driver abstraction that was not in the
+original plan — see §3A. Submit-gating on a missing mandatory document is wired through
+`checklistProgress()`, but the submit button itself is Phase 4, so that half of the Phase 3
+test row cannot be exercised until then.
 | 4 | T&C page + versioning, submit gate, Booking ID allocation, flow engine, status + timeline | 4–5 d | submit; see "Waiting on: AGM"; fields locked | **T&C text**, Q1, Q7 |
 | 5 | Signatory portal, signature capture, applicant in-person capture + witness, Co-ordinator validate, return/resume | 5–6 d | sign through all 9 steps; return from step 6 and confirm it resumes at 6 | Q5, Q6 |
 | 6 | PDF generation, side-by-side fidelity pass, write-once + SHA-256 | 4–5 d | download the PDF and hold it against the photo | **images**, logo |
@@ -535,6 +540,54 @@ Estimates in working days, one engineer.
 | 8 | Hardening: security review, login rate limiting, secure headers, Vitest + Playwright, error states, deploy, README | 4–5 d | production-ready on Vercel | Vercel Pro |
 
 **Total ≈ 33–41 working days (7–8 weeks).** Phases 2 and 6 cannot start until the images land.
+
+## 3A. Document storage (added in Phase 3)
+
+The brief forbids any store without a guaranteed India region, and names Vercel Blob,
+Neon and Cloudflare R2 specifically. Supabase Storage in `ap-south-1` satisfies that, but
+the application does not call it directly. Everything goes through a driver interface
+(`src/lib/storage/types.ts`) with two implementations:
+
+| | `local` | `supabase` |
+|---|---|---|
+| Where the bytes go | filesystem, `../dac-storage` | Supabase Storage, private bucket |
+| Used for | development, self-hosting | production |
+| Residency | this machine | project region, asserted to be `ap-south-1` |
+| Refuses to run | in production (ephemeral FS) | outside `ap-south-1`, in production |
+
+**Why an abstraction rather than just using Supabase.** Three reasons, in order of weight:
+
+1. **Development needs no credential.** A new developer clones, installs, seeds and uploads.
+   Nothing regulated leaves the machine, which is the production rule enforced the hardest
+   possible way.
+2. **The residency requirement is a configuration property, not a call-site property.** With
+   one seam, "are the bytes in India?" is one function to read — `storageStatus()`, which
+   `/api/health` reports. Scattered across upload and download paths it would be an audit.
+3. **The brief says free tiers now, paid later, and must scale.** A provider change is one
+   file.
+
+Selection is by configuration, not environment name: **if `SUPABASE_SERVICE_ROLE_KEY` is
+present, documents go to Supabase; otherwise to disk.** `STORAGE_DRIVER` overrides it.
+
+### The two-step upload
+
+The browser PUTs the bytes straight to storage, never through a serverless function — a
+10 MB scan would exceed Vercel's request body limit, and would cost function time and
+egress on every upload. Between authorising and recording, the server's decision travels
+in an HMAC-signed **grant** (`src/lib/storage/upload-token.ts`) naming the user, the form,
+the document type, the key, the content type and the size ceiling.
+
+```
+requestDocumentUpload()  ->  grant + signed URL        (server authorises)
+browser PUT              ->  storage                   (bytes never touch us)
+confirmDocumentUpload()  ->  verify object, write row   (server records)
+```
+
+A signed grant rather than a `pending_uploads` table because an abandoned upload then
+expires by itself; a table would need sweeping, and an unswept one is a slow accumulation
+of rows that look like real work. The `form_documents` row is written only after the
+server confirms the object landed at a plausible size — the reverse order risks a
+checklist claiming a PAN card is on file when it is not.
 
 ## 11. Risks
 
@@ -545,6 +598,7 @@ Estimates in working days, one engineer.
 | **T&C legal text accuracy** — wrong wording on a signed allotment document | **High** | Strongly prefer you paste the text. If transcribed, every uncertain word is flagged `[?word]` for review; versioned, and each form records the version it was signed under. |
 | **Resend 100/day cap** throttles the flow at ~14 bookings/day | Medium | In-app queue is the source of truth; email best-effort; digest batching; swappable via `Notifier`. |
 | Vercel **middleware runs outside India** | Medium | Cookie-presence-only middleware rule (§3), checked in CI. |
+| **Document bytes stored outside India** (new, Phase 3) | **High** | Driver abstraction (§3A). The Supabase driver refuses to start in production unless the region is `ap-south-1`; the local driver refuses production outright. `/api/health` reports the live driver and its residency, so a wrong deploy is visible rather than silent. Photo thumbnails use a plain `<img>`, never `next/image`, whose optimiser would cache them on a CDN outside India. |
 | **Supabase free: no backups, 7-day pause, 500 MB read-only cliff** | Medium | Keep-alive cron, weekly `pg_dump`, storage meter, documented upgrade trigger at 70%. |
 | **Vercel Hobby forbids commercial use**; 10 s timeout | Medium | Flagged now — Pro required before production (Q12). |
 | **Aadhaar / PAN handling** | **High** | Encrypted at rest, `_last4` only in lists, `VIEW_SENSITIVE` audited, masked in logs, excluded from the Sheet. Retention policy still open (Q14). |

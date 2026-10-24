@@ -24,6 +24,22 @@ const schema = z.object({
   APP_URL: z.string().min(1).default('http://localhost:3000'),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   CRON_SECRET: z.string().optional(),
+
+  // --- Document storage (Phase 3) ------------------------------------------
+  // Left optional on purpose: with nothing set the app uses the local
+  // filesystem driver, so development needs no cloud credential. The presence
+  // of SUPABASE_SERVICE_ROLE_KEY is what switches it to Supabase — see
+  // src/lib/storage/index.ts.
+  STORAGE_DRIVER: z.enum(['local', 'supabase']).optional(),
+  LOCAL_STORAGE_DIR: z.string().optional(),
+  SUPABASE_URL: z.string().optional(),
+  NEXT_PUBLIC_SUPABASE_URL: z.string().optional(),
+  SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
+  SUPABASE_STORAGE_BUCKET: z.string().optional(),
+  /// Must be ap-south-1. Inferred from the DATABASE_URL host when absent.
+  SUPABASE_REGION: z.string().optional(),
+  /// Escape hatch for self-hosting on a real disk; never set this on Vercel.
+  ALLOW_LOCAL_STORAGE: z.enum(['yes']).optional(),
 });
 
 export type Env = z.infer<typeof schema>;

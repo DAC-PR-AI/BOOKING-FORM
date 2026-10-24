@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { BoxInput } from '@/components/form-sheet/box-input';
 import {
   Field,
@@ -60,11 +61,16 @@ const RELATIONS = [
 function ApplicantBlock({
   title,
   photoCaption,
+  photoDocumentId,
+  documentsHref,
   value,
   onChange,
 }: {
   title: string;
   photoCaption: string;
+  /** The uploaded passport photograph, so the box shows what will print. */
+  photoDocumentId: string | null;
+  documentsHref: string;
   value: ApplicantState;
   onChange: (patch: Partial<ApplicantState>) => void;
 }) {
@@ -78,7 +84,11 @@ function ApplicantBlock({
       </h3>
 
       <div className="flex flex-col gap-4 sm:flex-row">
-        <PhotoBox caption={photoCaption} />
+        <PhotoBox
+          caption={photoCaption}
+          documentId={photoDocumentId}
+          manageHref={documentsHref}
+        />
 
         <div className="min-w-0 flex-1">
           <div className="grid gap-x-6 sm:grid-cols-2">
@@ -282,12 +292,15 @@ export function BookingFormEditor({
   initial,
   projects,
   sources,
+  photoDocumentIds,
   readOnly = false,
 }: {
   formId: string;
   initial: EditorState;
   projects: Array<{ value: string; label: string }>;
   sources: Array<{ value: string; label: string }>;
+  /** Uploaded passport photographs, by applicant. Null until one exists. */
+  photoDocumentIds: { primary: string | null; secondary: string | null };
   readOnly?: boolean;
 }) {
   const [state, setState] = useState<EditorState>(initial);
@@ -353,11 +366,22 @@ export function BookingFormEditor({
     (which: 'firstApplicant' | 'secondApplicant') => (p: Partial<ApplicantState>) =>
       patch({ [which]: { ...state[which], ...p } } as Partial<EditorState>);
 
+  const documentsHref = `/forms/${formId}/documents`;
+
   return (
     <div className="mx-auto max-w-4xl">
       {/* Save indicator */}
-      <div className="sticky top-0 z-10 mb-4 flex items-center justify-between border border-gray-300 bg-white px-4 py-2 text-xs shadow-sm">
-        <span className="font-medium text-gray-700">Booking Form — draft</span>
+      <div className="sticky top-0 z-10 mb-4 flex flex-wrap items-center justify-between gap-2 border border-gray-300 bg-white px-4 py-2 text-xs shadow-sm">
+        <span className="font-medium text-gray-700">
+          Booking Form — draft
+          {' · '}
+          <Link
+            href={documentsHref}
+            className="font-semibold text-dac-navy-700 underline underline-offset-2"
+          >
+            Supporting documents
+          </Link>
+        </span>
         <span aria-live="polite" className="text-gray-600">
           {status === 'saving' ? 'Saving…' : null}
           {status === 'saved' ? `All changes saved at ${message}` : null}
@@ -445,6 +469,8 @@ export function BookingFormEditor({
         <ApplicantBlock
           title="Sole / First Applicant"
           photoCaption="Photo of Sole / First Applicant"
+          photoDocumentId={photoDocumentIds.primary}
+          documentsHref={documentsHref}
           value={state.firstApplicant}
           onChange={setApplicant('firstApplicant')}
         />
@@ -463,6 +489,8 @@ export function BookingFormEditor({
           <ApplicantBlock
             title="Co / Second Applicant"
             photoCaption="Photo of Co / Second Applicant"
+            photoDocumentId={photoDocumentIds.secondary}
+            documentsHref={documentsHref}
             value={state.secondApplicant}
             onChange={setApplicant('secondApplicant')}
           />

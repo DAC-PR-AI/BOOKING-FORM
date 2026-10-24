@@ -59,7 +59,7 @@ export default async function EditBookingFormPage({
     notFound();
   }
 
-  const [projects, sources] = await Promise.all([
+  const [projects, sources, photos] = await Promise.all([
     prisma.project.findMany({
       where: { organizationId: user.organizationId, isActive: true },
       orderBy: { name: 'asc' },
@@ -68,7 +68,21 @@ export default async function EditBookingFormPage({
       where: { isActive: true },
       orderBy: { sortOrder: 'asc' },
     }),
+    // The passport photographs, so the printed photo boxes are not empty in
+    // the editor. Matched on the type key, which the admin screen cannot
+    // rename, rather than on the label, which it can.
+    prisma.formDocument.findMany({
+      where: {
+        bookingFormId: id,
+        documentType: { key: { in: ['photo_applicant_1', 'photo_applicant_2'] } },
+      },
+      select: { id: true, documentType: { select: { key: true } } },
+      orderBy: { uploadedAt: 'desc' },
+    }),
   ]);
+
+  const photoIdFor = (key: string): string | null =>
+    photos.find((d) => d.documentType.key === key)?.id ?? null;
 
   const primary = form.applicants.find((a) => a.applicantType === 'PRIMARY');
   const secondary = form.applicants.find((a) => a.applicantType === 'SECONDARY');
@@ -122,6 +136,10 @@ export default async function EditBookingFormPage({
       initial={initial}
       projects={projects.map((p) => ({ value: p.id, label: p.name }))}
       sources={sources.map((s) => ({ value: s.value, label: s.label }))}
+      photoDocumentIds={{
+        primary: photoIdFor('photo_applicant_1'),
+        secondary: photoIdFor('photo_applicant_2'),
+      }}
     />
   );
 }

@@ -128,17 +128,27 @@ export default async function MyFormsPage() {
                       {pending?.flowStep.label ?? '—'}
                     </td>
                     <td className="px-4 py-3 text-gray-600">{formatIst(f.updatedAt)}</td>
-                    <td className="px-4 py-3 text-right">
-                      {editable ? (
+                    <td className="px-4 py-3">
+                      <div className="flex justify-end gap-2">
+                        {editable ? (
+                          <Link
+                            href={`/forms/${f.id}/edit`}
+                            className="rounded-md border border-gray-300 px-3 py-1 text-xs font-medium text-gray-700 transition hover:bg-gray-50"
+                          >
+                            Continue
+                          </Link>
+                        ) : (
+                          <span className="self-center text-xs text-gray-400">Locked</span>
+                        )}
+                        {/* Reachable after submission too — a signatory needs to see
+                            the attachments, and the page itself is read-only then. */}
                         <Link
-                          href={`/forms/${f.id}/edit`}
+                          href={`/forms/${f.id}/documents`}
                           className="rounded-md border border-gray-300 px-3 py-1 text-xs font-medium text-gray-700 transition hover:bg-gray-50"
                         >
-                          Continue
+                          Documents
                         </Link>
-                      ) : (
-                        <span className="text-xs text-gray-400">Locked</span>
-                      )}
+                      </div>
                     </td>
                   </tr>
                 );

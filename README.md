@@ -4,13 +4,16 @@ Digitises the DAC Developers paper **Booking Form** (page 1) and **Terms & Condi
 Provisional Allotment** (page 2), with supporting-document upload and a sequential
 nine-step signature workflow.
 
-**Status: Phase 2 of 8 complete.**
+**Status: Phase 3 of 8 complete.**
 
 * **Phase 1** — project setup, data model, authentication, RBAC, app shell, admin project CRUD.
 * **Phase 2** — the digital booking form: all paper fields in order, the boxed character
   inputs, shared Zod validation, debounced autosave, and the My Forms list.
+* **Phase 3** — supporting documents: the data-driven checklist, direct signed-URL upload,
+  client-side image compression, replace/remove, audited views, and the photo boxes wired
+  to the uploaded photographs.
 
-See `PLAN.md` §10 for the full phase plan. Next: Phase 3, supporting documents.
+See `PLAN.md` §10 for the full phase plan. Next: Phase 4, submit and the signature flow.
 
 | Document | What's in it |
 |---|---|
@@ -65,6 +68,24 @@ $data = 'D:\OCT-2026\pgdata-dac'
 If `npm run dev` reports it cannot reach the database, this server is almost certainly
 not running. To use your own PostgreSQL on 5432 instead, just point `DATABASE_URL` at it
 and re-run `npm run db:migrate && npm run db:seed`.
+
+#### If connections hang instead of failing
+
+Check `server.log` for:
+
+```
+LOG:  could not reserve shared memory region (addr=...) for child ...: error code 487
+```
+
+The postmaster is alive and `pg_ctl status` reports "server is running", but it cannot
+fork a single backend, so every connection — `psql` included — hangs rather than
+erroring. On Windows this is an address-space collision on the shared memory segment,
+usually antivirus or another injected DLL landing where the postmaster wants to map it.
+
+Restarting clears it. `shared_buffers` is set to **32MB** and `max_connections` to **30**
+in this cluster (defaults were 128MB/100) because a smaller segment is markedly easier to
+place; the original file is kept as `postgresql.conf.bak`. Those values are ample for
+development and are irrelevant to production, which is Supabase.
 
 ### Generating the two keys
 
@@ -181,6 +202,36 @@ All personal data must physically reside in **India**.
   into the editor**. Reopening a draft shows those two boxes blank by design; re-enter to
   change them. Every other field repopulates.
 * Money is parsed to **BigInt paise** on the way in and never touches a float.
+
+## Supporting documents (Phase 3)
+
+`/forms/{id}/documents`, also linked from the editor header and the My Forms list.
+
+* **The checklist is data, not code.** Rows come from `document_types`, and whether each
+  is mandatory from `document_requirements` — so DAC can change the attachment list
+  without a deploy. Second-applicant rows are *hidden*, not merely optional, until a
+  second applicant exists.
+* **Storage is a swappable driver** (`src/lib/storage/`). With no credential configured
+  the app writes to the local filesystem (`../dac-storage`, outside the repository), so
+  development needs no cloud account. Setting `SUPABASE_SERVICE_ROLE_KEY` switches it to
+  Supabase Storage — there is nothing else to change. See `.env.example`.
+* **Uploads go direct to storage** against a short-lived HMAC-signed *grant* that names
+  the key, the content type and the size ceiling. The `form_documents` row is written
+  only after the server confirms the object actually landed, at the expected size — a row
+  that claims a PAN card is on file when it is not would be worse than no row at all.
+* **Images are downscaled in the browser** before upload (longest edge 1600px, JPEG q0.82).
+  A phone photo of an Aadhaar card goes from ~5 MB to a few hundred KB. PDFs pass through
+  untouched, and any failure falls back to the original file.
+* **Reads go through `/api/documents/{id}`**, which authorises, audits, then redirects to a
+  signed URL valid for 60 seconds. There is no code path that produces a public URL.
+  Photo boxes use a plain `<img>`, never `next/image` — the optimiser would cache those
+  bytes on a CDN outside India.
+* **Region is enforced, not assumed.** The Supabase driver refuses to start in production
+  unless the project region is `ap-south-1`, and `/api/health` reports the live driver and
+  its residency so a misconfigured deploy is visible rather than silent.
+
+`npx tsx --conditions=react-server scripts/verify-storage.ts` exercises the whole pipeline
+against the real database and the configured driver, then cleans up after itself.
 
 ## Security notes
 

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { env } from '@/lib/env';
+import { storageStatus } from '@/lib/storage';
 
 /**
  * Keep-alive + liveness probe.
@@ -37,11 +38,23 @@ export async function GET(request: Request): Promise<NextResponse> {
     );
   }
 
+  // Which storage driver is live, and whether its bytes are in India. The
+  // most likely way to break the residency requirement is a deploy that
+  // silently falls back to the wrong driver or the wrong region, and a
+  // misconfiguration nobody can see is one nobody fixes.
+  let storage: { driver: string; residency: { inIndia: boolean; detail: string } } | { error: string };
+  try {
+    storage = storageStatus();
+  } catch (error) {
+    storage = { error: error instanceof Error ? error.message : 'unavailable' };
+  }
+
   return NextResponse.json(
     {
       ok: true,
       database: 'reachable',
       latencyMs: Date.now() - startedAt,
+      storage,
       at: new Date().toISOString(),
     },
     { headers: { 'Cache-Control': 'no-store' } },
