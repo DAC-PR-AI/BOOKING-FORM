@@ -4,7 +4,7 @@ Digitises the DAC Developers paper **Booking Form** (page 1) and **Terms & Condi
 Provisional Allotment** (page 2), with supporting-document upload and a sequential
 nine-step signature workflow.
 
-**Status: Phase 3 of 8 complete.**
+**Status: Phase 4 of 8 complete.**
 
 * **Phase 1** — project setup, data model, authentication, RBAC, app shell, admin project CRUD.
 * **Phase 2** — the digital booking form: all paper fields in order, the boxed character
@@ -12,8 +12,11 @@ nine-step signature workflow.
 * **Phase 3** — supporting documents: the data-driven checklist, direct signed-URL upload,
   client-side image compression, replace/remove, audited views, and the photo boxes wired
   to the uploaded photographs.
+* **Phase 4** — the T&C page and versioning, the submit gate, Booking ID allocation, the
+  flow engine, and the booking status timeline.
 
-See `PLAN.md` §10 for the full phase plan. Next: Phase 4, submit and the signature flow.
+See `PLAN.md` §10 for the full phase plan. Next: Phase 5, the signatory portal and
+signature capture.
 
 | Document | What's in it |
 |---|---|
@@ -232,6 +235,60 @@ All personal data must physically reside in **India**.
 
 `npx tsx --conditions=react-server scripts/verify-storage.ts` exercises the whole pipeline
 against the real database and the configured driver, then cleans up after itself.
+
+## Submit and the signature flow (Phase 4)
+
+`/forms/{id}` is the booking's status page; `/forms/{id}/review` is where it gets submitted.
+
+* **The submit gate reports everything at once.** Submitting is irreversible, so the gate
+  lists every outstanding field *and* every missing mandatory document, grouped and ordered
+  as the paper form prints them, rather than surfacing one error per attempt. It validates
+  what is **in the database**, not what the browser sent — the creator may be submitting
+  from a tab opened yesterday.
+* **PAN and Aadhaar are never decrypted to validate them.** They were checked when they
+  were written, so the gate reads the stored last-4 as proof. See `storedSubmitSchema`.
+* **Booking IDs are `DAC/YYYY/NNNNN`**, allocated at submit inside the transaction via
+  `INSERT … ON CONFLICT … DO UPDATE` on `booking_sequences`. Gap-free: eight concurrent
+  submits get eight consecutive numbers, and a rolled-back submit consumes none. The year
+  is the **IST** year, so a booking taken at 01:00 on 1 January files under the new year.
+* **The pipeline is planned, not hard-coded.** `src/lib/flow/plan.ts` is pure and decides
+  which step is open, which are skipped and where a returned form resumes;
+  `src/lib/flow/engine.ts` only writes what it decides.
+* **A returned form resumes at the step that returned it**, not at step 1 — re-collecting
+  eight signatures for a typo would make the feature unusable. Signatures behind the resume
+  point are never touched.
+* **One case rewinds further.** If a second applicant is *added* while the form is back with
+  the creator, step 2 was skipped and is now needed, so the flow rewinds to it and the
+  approvals that came after are re-opened. Resuming at the return point would send a booking
+  onward with an unsigned second applicant.
+* **`SUBMITTED` vs `IN_REVIEW`:** `SUBMITTED` means in the pipeline with nothing signed yet;
+  `IN_REVIEW` starts at the first signature (Phase 5). The state diagram in `PLAN.md` §7
+  shows them as one transition; giving each an observable meaning is more useful.
+* **T&C are versioned and hashed.** Each form stores the version id it was accepted under,
+  and `/forms/{id}/terms` renders that exact text with its SHA-256. A correction makes a new
+  version; a referenced row is never edited.
+
+> **v1 of the T&C is not approved.** It was transcribed from a photograph. Production refuses
+> to submit against an unapproved version; development falls back to it so the flow is
+> testable before legal sign-off. Approve it by setting `tnc_versions.is_approved` once
+> `content/terms/v1.md` § REVIEW CHECKLIST is signed off.
+
+### Development helpers
+
+```bash
+# A complete draft that passes the gate, printed with its URLs.
+npx tsx --conditions=react-server scripts/dev-fixture.ts          # add --empty or --joint
+
+# End-to-end checks against the real database; both clean up after themselves.
+npx tsx --conditions=react-server scripts/verify-submit.ts
+npx tsx --conditions=react-server scripts/verify-storage.ts
+
+# A session cookie for curl, for a seeded .test account.
+npx tsx scripts/dev-session.ts exec@dac.test
+```
+
+`--conditions=react-server` is needed because these scripts import modules marked
+`server-only`, whose default entry point throws outside a React Server Component.
 
 ## Security notes
 

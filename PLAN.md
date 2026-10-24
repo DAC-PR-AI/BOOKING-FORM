@@ -529,10 +529,21 @@ Estimates in working days, one engineer.
 | 2 | The form replica: all fields, `BoxInput`, auto-uppercase, Zod validation, autosave draft, My Forms list | 5–6 d | create and save a draft; refresh loses nothing; validation fires | **images**, Q3, Q4 |
 | 3 | Documents: data-driven checklist, signed-URL direct upload, client compression, preview/replace, photo boxes wired into the sheet | 3–4 d | upload, preview, replace; oversize rejected; submit blocked while a mandatory doc is missing | Q2, Q13 |
 
-**Phases 1–3 are complete.** Phase 3 added a storage-driver abstraction that was not in the
-original plan — see §3A. Submit-gating on a missing mandatory document is wired through
-`checklistProgress()`, but the submit button itself is Phase 4, so that half of the Phase 3
-test row cannot be exercised until then.
+**Phases 1–4 are complete.** Phase 3 added a storage-driver abstraction that was not in the
+original plan — see §3A. Phase 4 completed the Phase 3 test row: submit is now gated on the
+mandatory-document set.
+
+Two decisions taken during Phase 4, both departures from §7 as drawn:
+
+* **`SUBMITTED` and `IN_REVIEW` are given separate, observable meanings.** The diagram shows
+  `SUBMITTED → IN_REVIEW` as one automatic transition, which would make `SUBMITTED` a state
+  nobody ever sees. Instead `SUBMITTED` means "in the pipeline, nothing signed yet" and
+  `IN_REVIEW` begins at the first signature (Phase 5).
+* **A resubmission can rewind behind the return point.** If a second applicant is added while
+  the form is back with the creator, step 2 was `SKIPPED` and is now required. Resuming at the
+  returning step would send the booking onward with an unsigned second applicant, so the flow
+  rewinds to step 2 and re-opens the approvals after it. This is the strict reading of Q6 for
+  the one case where the change is unambiguously material — Q6 itself is still open.
 | 4 | T&C page + versioning, submit gate, Booking ID allocation, flow engine, status + timeline | 4–5 d | submit; see "Waiting on: AGM"; fields locked | **T&C text**, Q1, Q7 |
 | 5 | Signatory portal, signature capture, applicant in-person capture + witness, Co-ordinator validate, return/resume | 5–6 d | sign through all 9 steps; return from step 6 and confirm it resumes at 6 | Q5, Q6 |
 | 6 | PDF generation, side-by-side fidelity pass, write-once + SHA-256 | 4–5 d | download the PDF and hold it against the photo | **images**, logo |
@@ -602,7 +613,7 @@ checklist claiming a PAN card is on file when it is not.
 | **Supabase free: no backups, 7-day pause, 500 MB read-only cliff** | Medium | Keep-alive cron, weekly `pg_dump`, storage meter, documented upgrade trigger at 70%. |
 | **Vercel Hobby forbids commercial use**; 10 s timeout | Medium | Flagged now — Pro required before production (Q12). |
 | **Aadhaar / PAN handling** | **High** | Encrypted at rest, `_last4` only in lists, `VIEW_SENSITIVE` audited, masked in logs, excluded from the Sheet. Retention policy still open (Q14). |
-| Signature validity after post-return edits | Medium | Default: stay valid, edits logged with a banner (Q6) — needs your explicit confirmation; it is a legal question, not a technical one. |
+| Signature validity after post-return edits | Medium | Default: stay valid, edits logged with a banner (Q6) — needs your explicit confirmation; it is a legal question, not a technical one. **Phase 4 implements the strict rule for one unambiguous case**: adding a second applicant rewinds the flow to their step and re-opens the approvals after it. Every other field still follows the lenient default pending your decision. |
 | **Google Sheet becomes a dependency of booking creation** (new, Q4) | Medium | Cached read-through (§2A): the form reads Postgres, never Sheets. Sync keyed on a stable code so a typo fix in the sheet is a rename, not a duplicate. Projects are deactivated, never deleted. |
 | Free-tier figures drift | Low | Re-verify at Phase 1; sources dated in §2. |
 

@@ -203,6 +203,53 @@ export const submitSchema = z.object({
 export type SubmitInput = z.input<typeof submitSchema>;
 export type SubmitOutput = z.output<typeof submitSchema>;
 
+// --- the submit gate, applied to STORED data -------------------------------
+
+/**
+ * `submitSchema` validates what a browser sent. The submit gate has a harder
+ * job: it must validate what is actually **in the database**, because that is
+ * what gets signed and printed. A client payload cannot be the authority — the
+ * creator might submit from a stale tab, and the brief requires the server to
+ * re-parse regardless.
+ *
+ * One field cannot be re-validated that way. PAN and Aadhaar are encrypted at
+ * rest and deliberately never decrypted for validation (PLAN.md §6), so the
+ * gate checks the stored **last-4** instead. That is sound rather than a
+ * shortcut: `saveDraft` only ever writes ciphertext and a last-4 for a value
+ * that already passed `isValidPan` / `isValidAadhaar`, so a present last-4 is
+ * proof that a well-formed identifier was stored. An absent one means the
+ * field was never filled, or was filled with something invalid — which is
+ * exactly what the gate needs to report.
+ *
+ * Everything else reuses the same section schemas as the client, so there is
+ * one set of rules and not two that can drift.
+ */
+const last4 = (label: string) =>
+  z
+    .string({ error: `${label} is required.` })
+    .trim()
+    .length(4, `${label} is required.`);
+
+export const storedApplicantSchema = applicantSchema
+  .omit({ pan: true, aadhaar: true })
+  .extend({
+    panLast4: last4('PAN card number'),
+    aadhaarLast4: last4('Adhaar number'),
+  });
+
+export const storedSubmitSchema = z.object({
+  header: headerSchema,
+  firstApplicant: storedApplicantSchema,
+  secondApplicant: storedApplicantSchema.nullable(),
+  communicationAddress: addressSchema,
+  permanentAddress: addressSchema,
+  property: propertySchema,
+  payment: paymentSchema,
+  remarks: optionalText(1000),
+});
+
+export type StoredSubmitInput = z.input<typeof storedSubmitSchema>;
+
 /**
  * Autosave schema — every field optional and unvalidated beyond type and
  * length. A draft is allowed to be nonsense; only submit is a gate.

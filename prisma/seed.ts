@@ -107,12 +107,34 @@ const DOCUMENT_TYPES: Array<{
   { key: 'discount_cost_sheet', label: 'Discount cost sheet', helpText: 'Only if a discount was approved.', scope: 'FORM', mimes: SCAN, sortOrder: 100 },
 ];
 
-/** Pulls the T&C body out of content/terms/v1.md, excluding the review checklist. */
+/**
+ * Pulls the customer-facing T&C text out of content/terms/v1.md.
+ *
+ * Three parts of that file are editorial, not legal, and must not reach the
+ * database: the YAML frontmatter, the "DO NOT SHIP UNTIL REVIEWED" blockquote
+ * above the title, and the review checklist below the text. The body therefore
+ * starts at the document's own `#` title line.
+ *
+ * This matters beyond tidiness. `body` is what an applicant reads and what
+ * gets printed on page 2, and `body_sha256` is the proof of which text they
+ * agreed to — so an internal note folded into it would both be shown to a
+ * customer and corrupt the evidence.
+ */
 function readTncBody(): string {
   const raw = readFileSync(resolve(repoRoot, 'content/terms/v1.md'), 'utf8');
   const withoutFrontmatter = raw.replace(/^---[\s\S]*?\n---\n/, '');
-  const [body] = withoutFrontmatter.split('# § REVIEW CHECKLIST');
-  return (body ?? withoutFrontmatter).trim();
+  const [beforeChecklist] = withoutFrontmatter.split('# § REVIEW CHECKLIST');
+  const text = (beforeChecklist ?? withoutFrontmatter).trim();
+
+  const titleIndex = text.search(/^# /m);
+  if (titleIndex === -1) {
+    throw new Error(
+      'content/terms/v1.md has no "# " title line, so the customer-facing text cannot be ' +
+        'separated from the editorial preamble.',
+    );
+  }
+
+  return text.slice(titleIndex).trim();
 }
 
 async function main(): Promise<void> {

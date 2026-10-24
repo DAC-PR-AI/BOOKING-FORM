@@ -109,9 +109,16 @@ export default async function MyFormsPage() {
                       {f.bookingId ?? <span className="text-gray-400">—</span>}
                     </td>
                     <td className="px-4 py-3 font-medium text-gray-900">
-                      {applicant?.fullName ?? (
-                        <span className="font-normal text-gray-400">Not yet entered</span>
-                      )}
+                      {/* The whole booking, not just the editable part — a locked
+                          form still has a status page worth reaching. */}
+                      <Link
+                        href={`/forms/${f.id}`}
+                        className="underline decoration-gray-300 underline-offset-2 hover:decoration-gray-600"
+                      >
+                        {applicant?.fullName ?? (
+                          <span className="font-normal text-gray-400">Not yet entered</span>
+                        )}
+                      </Link>
                     </td>
                     <td className="px-4 py-3 text-gray-600">{f.project?.name ?? '—'}</td>
                     <td className="px-4 py-3 tabular-nums text-gray-600">
@@ -140,6 +147,14 @@ export default async function MyFormsPage() {
                         ) : (
                           <span className="self-center text-xs text-gray-400">Locked</span>
                         )}
+                        {editable ? (
+                          <Link
+                            href={`/forms/${f.id}/review`}
+                            className="rounded-md border border-gray-300 px-3 py-1 text-xs font-medium text-gray-700 transition hover:bg-gray-50"
+                          >
+                            {f.status === 'RETURNED' ? 'Resubmit' : 'Submit'}
+                          </Link>
+                        ) : null}
                         {/* Reachable after submission too — a signatory needs to see
                             the attachments, and the page itself is read-only then. */}
                         <Link

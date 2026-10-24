@@ -100,6 +100,12 @@ export default async function DocumentsPage({
             </Link>
           ) : null}
           <Link
+            href={`/forms/${form.id}`}
+            className="rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+          >
+            Booking status
+          </Link>
+          <Link
             href="/forms"
             className="rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
           >

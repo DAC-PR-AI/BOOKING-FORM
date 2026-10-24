@@ -381,6 +381,13 @@ export function BookingFormEditor({
           >
             Supporting documents
           </Link>
+          {' · '}
+          <Link
+            href={`/forms/${formId}/review`}
+            className="font-semibold text-dac-navy-700 underline underline-offset-2"
+          >
+            Review and submit
+          </Link>
         </span>
         <span aria-live="polite" className="text-gray-600">
           {status === 'saving' ? 'Saving…' : null}
