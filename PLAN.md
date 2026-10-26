@@ -529,9 +529,20 @@ Estimates in working days, one engineer.
 | 2 | The form replica: all fields, `BoxInput`, auto-uppercase, Zod validation, autosave draft, My Forms list | 5–6 d | create and save a draft; refresh loses nothing; validation fires | **images**, Q3, Q4 |
 | 3 | Documents: data-driven checklist, signed-URL direct upload, client compression, preview/replace, photo boxes wired into the sheet | 3–4 d | upload, preview, replace; oversize rejected; submit blocked while a mandatory doc is missing | Q2, Q13 |
 
-**Phases 1–4 are complete.** Phase 3 added a storage-driver abstraction that was not in the
+**Phases 1–5 are complete.** Phase 3 added a storage-driver abstraction that was not in the
 original plan — see §3A. Phase 4 completed the Phase 3 test row: submit is now gated on the
 mandatory-document set.
+
+Phase 5 added two rules that §7 does not express, both recorded here because they are
+judgement calls rather than mechanics:
+
+* **Signing has no admin override.** `canActOnStep` refuses an admin on a step that is not
+  theirs, including an applicant step on a form they did not create. An admin can rescue,
+  view and (Phase 7) reassign, but cannot sign for someone else.
+* **Staff steps are claimed rather than pre-assigned.** `planFlow` leaves `assigneeId` null
+  for staff steps, so any holder of the role can act and the first to do so claims it. This
+  is what made the Phase 1 queue stubs (filtered on `assigneeId`) show nothing, and why
+  `authoriseFormAccess` now also matches the role of a PENDING step.
 
 Two decisions taken during Phase 4, both departures from §7 as drawn:
 

@@ -6,6 +6,8 @@ import { prisma } from '@/lib/db';
 import { requireUser } from '@/lib/auth/rbac';
 import { authoriseFormAccess } from '@/lib/documents/access';
 import { formatPaise } from '@/lib/format/money';
+// Aliased: @prisma/client already exports a FormStatus in this file.
+import { canActOnStep, type FormStatus as FlowFormStatus } from '@/lib/flow/act';
 import { PageHeader } from '@/components/ui/page-header';
 
 export const metadata: Metadata = { title: 'Booking status' };
@@ -87,9 +89,18 @@ export default async function BookingStatusPage({
           stepRecords: {
             orderBy: { orderIndex: 'asc' },
             include: {
-              flowStep: { select: { label: true, action: true, role: { select: { label: true } } } },
+              flowStep: {
+                select: {
+                  label: true,
+                  action: true,
+                  roleId: true,
+                  actsOnCreatorDevice: true,
+                  role: { select: { label: true } },
+                },
+              },
               assignee: { select: { name: true } },
               witnessUser: { select: { name: true } },
+              signatureAsset: { select: { id: true, signerName: true } },
             },
           },
         },
@@ -106,6 +117,29 @@ export default async function BookingStatusPage({
   ).length;
   const applicableCount = records.filter((r) => r.status !== 'SKIPPED').length;
 
+  // Which step, if any, this viewer can act on right now. Same function the
+  // signing page and the queue use, so the three cannot disagree.
+  const actor = {
+    userId: user.id,
+    roleId: user.roleId,
+    isCreator: form.createdById === user.id,
+  };
+  const actionable = records.find(
+    (record) =>
+      canActOnStep(
+        actor,
+        {
+          orderIndex: record.orderIndex,
+          status: record.status,
+          assigneeId: record.assigneeId,
+          roleId: record.flowStep.roleId,
+          action: record.flowStep.action,
+          actsOnCreatorDevice: record.flowStep.actsOnCreatorDevice,
+        },
+        form.status as FlowFormStatus,
+      ).allowed,
+  );
+
   return (
     <div className="mx-auto max-w-3xl">
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
@@ -121,6 +155,18 @@ export default async function BookingStatusPage({
       </div>
 
       <div className="mb-6 flex flex-wrap gap-2">
+        {actionable ? (
+          <Link
+            href={`/forms/${form.id}/sign/${actionable.orderIndex}`}
+            className="rounded-md bg-dac-navy-700 px-3 py-2 text-sm font-semibold text-white transition hover:bg-dac-navy-900"
+          >
+            {actionable.flowStep.actsOnCreatorDevice
+              ? `Capture ${actionable.flowStep.label} signature`
+              : actionable.flowStep.action === 'VALIDATE_AND_SIGN'
+                ? 'Validate and sign'
+                : 'Review and sign'}
+          </Link>
+        ) : null}
         {access.editable ? (
           <>
             <Link
@@ -225,7 +271,8 @@ export default async function BookingStatusPage({
           <ol className="divide-y divide-gray-100">
             {records.map((record) => {
               const presentation = STEP_PRESENTATION[record.status];
-              const isApplicantStep = record.flowStep.action === 'SIGN' && record.witnessUserId;
+              const isApplicantStep = record.flowStep.actsOnCreatorDevice;
+              const isActionable = actionable?.id === record.id;
 
               return (
                 <li key={record.id} className="flex gap-3 px-4 py-3">
@@ -250,7 +297,11 @@ export default async function BookingStatusPage({
                     <p className="mt-0.5 text-xs text-gray-500">
                       {presentation.label}
                       {record.actedAt ? ` · ${formatIst(record.actedAt)}` : null}
-                      {record.assignee ? ` · ${record.assignee.name}` : null}
+                      {record.signatureAsset?.signerName
+                        ? ` · ${record.signatureAsset.signerName}`
+                        : record.assignee
+                          ? ` · ${record.assignee.name}`
+                          : null}
                       {!record.assignee && record.status === 'PENDING'
                         ? ` · any ${record.flowStep.role.label}`
                         : null}
@@ -265,6 +316,28 @@ export default async function BookingStatusPage({
                       </p>
                     ) : null}
                   </div>
+
+                  {record.signatureAsset ? (
+                    /*
+                      Plain <img>, never next/image: the optimiser would fetch
+                      and cache a signature on a CDN outside India (brief §3).
+                    */
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img
+                      src={`/api/signatures/${record.signatureAsset.id}`}
+                      alt={`Signature for ${record.flowStep.label}`}
+                      className="h-8 w-24 shrink-0 self-center object-contain"
+                    />
+                  ) : null}
+
+                  {isActionable ? (
+                    <Link
+                      href={`/forms/${form.id}/sign/${record.orderIndex}`}
+                      className="shrink-0 self-center rounded-md bg-dac-navy-700 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-dac-navy-900"
+                    >
+                      {record.flowStep.actsOnCreatorDevice ? 'Capture' : 'Sign'}
+                    </Link>
+                  ) : null}
                 </li>
               );
             })}

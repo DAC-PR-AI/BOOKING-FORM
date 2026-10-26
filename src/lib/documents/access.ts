@@ -3,20 +3,24 @@ import { prisma } from '@/lib/db';
 import type { SessionUser } from '@/lib/auth/session';
 
 /**
- * Who may see a booking's supporting documents.
+ * Who may see a booking, its documents and its signatures.
  *
  * These files are PAN cards, Aadhaar cards and photographs, so the list is
  * deliberately short and derived from the work, not from seniority:
  *
  *   * an Admin, who can rescue any form;
  *   * the sales executive who created it;
- *   * anyone the flow has actually placed on this form — they are being asked
- *     to sign it, and signing without seeing the attachments would be absurd.
+ *   * whoever has already acted on a step of this form — signing claims the
+ *     step, so they can look back at what they put their name to;
+ *   * whoever the form is waiting on **right now**, matched by role, because
+ *     staff steps are claimable by any holder of the role rather than assigned
+ *     to one named person in advance (`planFlow` leaves `assigneeId` null).
  *
- * Note the third rule is a step record on *this* form, not a role. Holding the
- * AGM role does not grant sight of every booking in the company; being the AGM
- * on this booking does. Denials are 404, so a signatory cannot discover that a
- * booking exists by probing (PLAN.md §9).
+ * That last rule is the narrowest one that works. Holding the AGM role does
+ * not grant sight of every booking in the company: it grants sight of the ones
+ * currently sitting on the AGM step. Before their turn a signatory has no
+ * business knowing the booking exists — and denials are 404, not 403, so they
+ * cannot find out by probing (PLAN.md §9).
  */
 
 export type DocumentAccess = {
@@ -42,7 +46,16 @@ export async function authoriseFormAccess(
         : {
             OR: [
               { createdById: user.id },
+              // A step they have acted on, or claimed.
               { flowInstance: { stepRecords: { some: { assigneeId: user.id } } } },
+              // The step the form is waiting on, matched by role.
+              {
+                flowInstance: {
+                  stepRecords: {
+                    some: { status: 'PENDING', flowStep: { roleId: user.roleId } },
+                  },
+                },
+              },
             ],
           }),
     },

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildDocumentKey,
+  buildSignatureKey,
   extensionFor,
   formIdFromKey,
   isSafeKey,
@@ -97,6 +98,34 @@ describe('buildDocumentKey', () => {
         unique: 'u',
       }),
     ).toThrow();
+  });
+});
+
+describe('buildSignatureKey', () => {
+  it('nests signatures under the booking, beside its documents', () => {
+    expect(buildSignatureKey({ bookingFormId: FORM, unique: 'abc123' })).toBe(
+      `bookings/${FORM}/signatures/abc123.png`,
+    );
+  });
+
+  it('never collides, so re-signing cannot overwrite the old image', () => {
+    const first = buildSignatureKey({ bookingFormId: FORM, unique: 'one' });
+    const second = buildSignatureKey({ bookingFormId: FORM, unique: 'two' });
+    expect(first).not.toBe(second);
+  });
+
+  it('produces a key that passes the safety check', () => {
+    expect(isSafeKey(buildSignatureKey({ bookingFormId: FORM, unique: 'u' }))).toBe(true);
+  });
+
+  it('cannot be talked out of its prefix', () => {
+    const key = buildSignatureKey({ bookingFormId: '../../../etc', unique: 'u' });
+    expect(key.startsWith('bookings/')).toBe(true);
+    expect(key).not.toContain('..');
+  });
+
+  it('rejects empty segments', () => {
+    expect(() => buildSignatureKey({ bookingFormId: '...', unique: 'u' })).toThrow();
   });
 });
 

@@ -4,7 +4,7 @@ Digitises the DAC Developers paper **Booking Form** (page 1) and **Terms & Condi
 Provisional Allotment** (page 2), with supporting-document upload and a sequential
 nine-step signature workflow.
 
-**Status: Phase 4 of 8 complete.**
+**Status: Phase 5 of 8 complete.**
 
 * **Phase 1** — project setup, data model, authentication, RBAC, app shell, admin project CRUD.
 * **Phase 2** — the digital booking form: all paper fields in order, the boxed character
@@ -14,9 +14,10 @@ nine-step signature workflow.
   to the uploaded photographs.
 * **Phase 4** — the T&C page and versioning, the submit gate, Booking ID allocation, the
   flow engine, and the booking status timeline.
+* **Phase 5** — the signatory portal, signature capture, in-person applicant capture with
+  witness, the Co-ordinator's validate step, and return/resume.
 
-See `PLAN.md` §10 for the full phase plan. Next: Phase 5, the signatory portal and
-signature capture.
+See `PLAN.md` §10 for the full phase plan. Next: Phase 6, PDF generation.
 
 | Document | What's in it |
 |---|---|
@@ -289,6 +290,55 @@ npx tsx scripts/dev-session.ts exec@dac.test
 
 `--conditions=react-server` is needed because these scripts import modules marked
 `server-only`, whose default entry point throws outside a React Server Component.
+
+## Signing (Phase 5)
+
+Signatories land on `/signatory/queue`, the Co-ordinator on `/coordinator/queue`, and both
+lead to `/forms/{id}/sign/{step}` — one screen for all nine steps, because the decision is
+always the same: read the booking, then sign it or send it back. What differs comes from the
+`flow_steps` row, so a tenth step needs no new page.
+
+* **Signing is personal — there is no admin override.** An admin can rescue, view and
+  reassign, but letting them sign as somebody else would put a name on a legal document that
+  never agreed to it, and make the audit trail a record of who clicked rather than who
+  approved.
+* **Staff steps are claimed, not pre-assigned.** Any active holder of the step's role can
+  pick a booking up; the first to act claims it. Pinning each step to one named person would
+  stall every booking behind one absence.
+* **A signatory sees a booking only while it is waiting on them**, or afterwards if they
+  signed it. Before their turn it does not exist as far as they are concerned, and denials
+  are 404 so they cannot find out by probing.
+* **Applicant steps are captured in person.** Steps 1 and 2 are assigned to the creator, who
+  hands over the tablet. The applicant types their name and signs; the name is stored on the
+  signature and the creator is recorded as **witness**. Applicants have no login, so the
+  typed name is the only record of who signed.
+* **The Co-ordinator's step is `VALIDATE_AND_SIGN`** and lands on `VALIDATED`, not `SIGNED`,
+  so the one step that asserts the form was *checked* stays distinguishable. Signing without
+  ticking the box is refused server-side.
+* **Returning needs a reason.** The comment is mandatory (10 characters minimum, enforced on
+  the server) because it is the only thing the creator sees. Signatures already collected
+  survive, and the booking comes back to the step that sent it away.
+* **`SUBMITTED` → `IN_REVIEW`** on the first signature; **`COMPLETED`** when the last
+  applicable step is signed, which the pipeline configuration decides rather than a hard-coded
+  "the CRM is last".
+* **The signature image goes to storage before the database transaction.** A storage write
+  cannot join a Postgres transaction, so this order can leave an unreferenced object behind —
+  recoverable and invisible. The reverse would leave a step marked SIGNED pointing at bytes
+  that were never stored: a booking that looks approved and cannot be printed. Orphans are
+  cleaned up on a rollback or a lost race.
+* **The pad is validated, not trusted.** The server checks the PNG magic number rather than
+  the declared `data:image/png` type, caps the size, and rejects an implausibly small image.
+  The browser also disables the button until a stroke exists; neither check is sufficient
+  alone.
+* Signature images are served by `/api/signatures/{id}` — authorise, then redirect to a
+  60-second signed URL — and rendered with a plain `<img>`, never `next/image`, whose
+  optimiser would cache them on a CDN outside India.
+
+```bash
+# 36 checks: all nine steps, the return, the resume, and that the queue query
+# agrees with canActOnStep. Cleans up its bookings and signature objects.
+npx tsx --conditions=react-server scripts/verify-sign.ts
+```
 
 ## Security notes
 

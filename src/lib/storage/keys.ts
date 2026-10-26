@@ -59,6 +59,29 @@ export function buildDocumentKey(input: {
   return `bookings/${form}/${type}/${unique}.${extensionFor(input.mimeType)}`;
 }
 
+/**
+ * Signature images: bookings/{formId}/signatures/{uuid}.png
+ *
+ * Same prefix as the documents so one booking's files sit together, and the
+ * same random segment so re-signing a reopened step never overwrites the
+ * previous image in place — the old signature stays addressable for the audit
+ * trail even once the step record points at the new one.
+ */
+export function buildSignatureKey(input: {
+  bookingFormId: string;
+  /** Injected in tests; a UUID in production. */
+  unique: string;
+}): string {
+  const form = sanitizeSegment(input.bookingFormId);
+  const unique = sanitizeSegment(input.unique);
+
+  if (!form || !unique) {
+    throw new Error('Cannot build a signature key from empty segments.');
+  }
+
+  return `bookings/${form}/signatures/${unique}.png`;
+}
+
 /** Guards a key that arrived from outside before it reaches the filesystem. */
 export function isSafeKey(key: string): boolean {
   if (key.length === 0 || key.length > 512) return false;
