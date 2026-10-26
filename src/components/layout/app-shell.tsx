@@ -15,6 +15,7 @@ function navFor(role: RoleName): NavItem[] {
         { href: '/admin/users', label: 'Users' },
         { href: '/admin/projects', label: 'Projects' },
         { href: '/admin/audit', label: 'Audit' },
+        { href: '/admin/system', label: 'System' },
       ];
     case 'SALES_EXECUTIVE':
       return [

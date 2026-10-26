@@ -529,9 +529,14 @@ Estimates in working days, one engineer.
 | 2 | The form replica: all fields, `BoxInput`, auto-uppercase, Zod validation, autosave draft, My Forms list | 5–6 d | create and save a draft; refresh loses nothing; validation fires | **images**, Q3, Q4 |
 | 3 | Documents: data-driven checklist, signed-URL direct upload, client compression, preview/replace, photo boxes wired into the sheet | 3–4 d | upload, preview, replace; oversize rejected; submit blocked while a mandatory doc is missing | Q2, Q13 |
 
-**Phases 1–6 are complete.** Phase 3 added a storage-driver abstraction that was not in the
+**Phases 1–7 are complete.** Phase 3 added a storage-driver abstraction that was not in the
 original plan — see §3A. Phase 4 completed the Phase 3 test row: submit is now gated on the
 mandatory-document set.
+
+Phase 7 is complete except for **connecting** the Google Sheet, which waits on DAC creating
+it — agreed as the last step from the outset. The sync itself is built, tested and reports
+itself as not configured until the four environment variables are set; the project list is
+maintained by hand in the meantime and nothing is blocked.
 
 Phase 6 resolved the §4 bet. `@react-pdf/renderer` reproduces the sheet acceptably: all 61
 printed labels land in paper order, verified automatically by reading the text back out of the
@@ -634,7 +639,7 @@ checklist claiming a PAN card is on file when it is not.
 | ~~Reference images absent~~ → **RESOLVED**; residual risk is image *resolution* (1280×960) for Phase 6 geometry | Low | Field diff done and clean (§0). A 300 dpi scan would help Phase 6 but is not required. |
 | ~~**PDF fidelity** against react-pdf's separate layout engine~~ → **RESOLVED in Phase 6** | Low | react-pdf reproduces both pages. `src/lib/pdf/form-layout.ts` owns the geometry as planned, and `scripts/verify-pdf.ts` asserts all 61 printed labels are present and in paper order by reading the text back out of the generated file. Chromium fallback documented but unused. Residual risk is cosmetic spacing, which only a human side-by-side pass can judge. |
 | **T&C legal text accuracy** — wrong wording on a signed allotment document | **High** | Strongly prefer you paste the text. If transcribed, every uncertain word is flagged `[?word]` for review; versioned, and each form records the version it was signed under. |
-| **Resend 100/day cap** throttles the flow at ~14 bookings/day | Medium | In-app queue is the source of truth; email best-effort; digest batching; swappable via `Notifier`. |
+| ~~**Resend 100/day cap** throttles the flow at ~14 bookings/day~~ → **HANDLED in Phase 7** | Low | One digest per person per night, not one email per event. The budget is counted from what was actually sent today; over the cap, people are deferred longest-waiting-first rather than dropped. The in-app queue is the system of record and is unaffected if email never runs at all. |
 | Vercel **middleware runs outside India** | Medium | Cookie-presence-only middleware rule (§3), checked in CI. |
 | **Document bytes stored outside India** (new, Phase 3) | **High** | Driver abstraction (§3A). The Supabase driver refuses to start in production unless the region is `ap-south-1`; the local driver refuses production outright. `/api/health` reports the live driver and its residency, so a wrong deploy is visible rather than silent. Photo thumbnails use a plain `<img>`, never `next/image`, whose optimiser would cache them on a CDN outside India. |
 | **Supabase free: no backups, 7-day pause, 500 MB read-only cliff** | Medium | Keep-alive cron, weekly `pg_dump`, storage meter, documented upgrade trigger at 70%. |

@@ -4,7 +4,7 @@ Digitises the DAC Developers paper **Booking Form** (page 1) and **Terms & Condi
 Provisional Allotment** (page 2), with supporting-document upload and a sequential
 nine-step signature workflow.
 
-**Status: Phase 6 of 8 complete.**
+**Status: Phase 7 of 8 complete.**
 
 * **Phase 1** — project setup, data model, authentication, RBAC, app shell, admin project CRUD.
 * **Phase 2** — the digital booking form: all paper fields in order, the boxed character
@@ -18,9 +18,10 @@ nine-step signature workflow.
   witness, the Co-ordinator's validate step, and return/resume.
 * **Phase 6** — PDF generation: both pages of the paper form, write-once with a SHA-256,
   and an automated fidelity check.
+* **Phase 7** — notifications and the nightly digest, the audit viewer, the free-tier
+  meters, and the Google Sheet project sync.
 
-See `PLAN.md` §10 for the full phase plan. Next: Phase 7, notifications, admin screens and
-the Google Sheet sync.
+See `PLAN.md` §10 for the full phase plan. Next: Phase 8, hardening and deployment.
 
 | Document | What's in it |
 |---|---|
@@ -438,6 +439,32 @@ the way in — so the whole payload is safe to show.
 
 Unconfigured, the sync reports itself as not configured and everything else works — see
 `.env.example` for the four variables and the expected columns.
+
+### The nightly digest
+
+One email per person per night, listing what they have not read — never one per event.
+Resend's free tier is 3,000 a month but **capped at 100 a day**, and the day is the binding
+limit: per-event sending runs out at about eleven bookings.
+
+* Only **unread** notifications are emailed; a reminder about something already seen is noise.
+* Only ones **not emailed before**, so a notification left unread for a week produces one
+  email, not seven.
+* The budget is counted from what was actually sent today, because a manual run and the cron
+  share the same 100.
+* When the cap is reached, people are **deferred, not dropped** — longest-waiting first, so a
+  capped night never starves the same person twice.
+* `.test` addresses are skipped. The seeded demo accounts are all on `.test`, which is
+  reserved so it never resolves; sending to them would burn the budget on guaranteed bounces.
+
+Unconfigured, the digest reports itself as not configured and the in-app queue is unaffected.
+
+### Free-tier meters
+
+`/admin/system` shows database and storage usage against the free-tier limits, how many more
+bookings fit (projected from what stored ones actually weigh), which integrations are on, and
+where documents are stored. The database meter is the one that matters: crossing 500 MB puts
+Supabase into **read-only**, which here means bookings can be read but not signed. The
+documented upgrade trigger is 70%.
 
 ```bash
 npm run verify:notify    # 16 checks: who gets told, and what notifications may carry

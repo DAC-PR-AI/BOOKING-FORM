@@ -41,6 +41,14 @@ const schema = z.object({
   /// Escape hatch for self-hosting on a real disk; never set this on Vercel.
   ALLOW_LOCAL_STORAGE: z.enum(['yes']).optional(),
 
+  // --- Email digest (Phase 7) ----------------------------------------------
+  // Optional. Without RESEND_API_KEY the digest reports itself as not
+  // configured and the in-app queue carries on unaffected.
+  RESEND_API_KEY: z.string().optional(),
+  RESEND_FROM: z.string().optional(),
+  /// Resend's free tier allows 100 a day; lower it to be careful.
+  RESEND_DAILY_CAP: z.string().optional(),
+
   // --- Google Sheets project sync (Phase 7) --------------------------------
   // Optional: with these unset the project list is maintained by hand in the
   // admin screen and the sync simply reports itself as not configured. The
