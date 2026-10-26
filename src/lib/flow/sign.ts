@@ -23,6 +23,7 @@ import {
   type FormStatus,
 } from './act';
 import { loadFlowSteps } from './engine';
+import { notifyCompleted, notifyReturned, notifyStepOpened } from '@/lib/notify/dispatch';
 
 /**
  * Signing and returning a step.
@@ -267,6 +268,15 @@ export async function signStep(user: SessionUser, input: SignInput): Promise<Sig
     throw error;
   }
 
+  // After the commit, and best-effort: a signature that is safely recorded but
+  // unannounced is recoverable; a signature rolled back because a notification
+  // failed is not.
+  if (advance.nextOrder !== null) {
+    await notifyStepOpened(form.id, advance.nextOrder);
+  } else {
+    await notifyCompleted(form.id);
+  }
+
   const nextLabel =
     advance.nextOrder === null
       ? null
@@ -391,6 +401,12 @@ export async function returnStep(
   });
 
   if (raced) return { ok: false, error: DENIAL_MESSAGES['step-not-open'] };
+
+  await notifyReturned(form.id, {
+    stepLabel: record.flowStep.label,
+    returnedBy: user.name,
+    comment: comment.comment,
+  });
 
   return {
     ok: true,

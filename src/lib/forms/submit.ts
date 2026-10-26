@@ -5,6 +5,7 @@ import { audit } from '@/lib/audit/log';
 import { assessForm, loadFormForGate } from './readiness';
 import { activeTermsVersion } from './terms';
 import { resumeFlow, startFlow } from '@/lib/flow/engine';
+import { notifyStepOpened } from '@/lib/notify/dispatch';
 import { allocateBookingId as allocate } from './allocate';
 import type { GateIssue } from './gate-issues';
 
@@ -166,6 +167,11 @@ export async function performSubmit(
       ? `Resubmitted ${result.bookingId} after a return; flow resumes at step ${result.currentStepOrder ?? '—'}.`
       : `Submitted ${result.bookingId}; T&C ${terms.version} accepted (${terms.bodySha256.slice(0, 12)}…).`,
   });
+
+  // Best-effort, after the commit — see the note in `sign.ts`.
+  if (result.currentStepOrder !== null) {
+    await notifyStepOpened(form.id, result.currentStepOrder);
+  }
 
   // Cache revalidation is a Next concern and belongs to the Server Action, not
   // here: this function has already committed, and a failed revalidate must

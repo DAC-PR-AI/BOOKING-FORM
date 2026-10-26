@@ -26,7 +26,8 @@
     "verify:storage": "tsx --tsconfig scripts/tsconfig.json scripts/verify-storage.ts",
     "verify:submit": "tsx --tsconfig scripts/tsconfig.json scripts/verify-submit.ts",
     "verify:sign": "tsx --tsconfig scripts/tsconfig.json scripts/verify-sign.ts",
-    "verify:pdf": "tsx --tsconfig scripts/tsconfig.json scripts/verify-pdf.ts"
+    "verify:pdf": "tsx --tsconfig scripts/tsconfig.json scripts/verify-pdf.ts",
+    "verify:notify": "tsx --tsconfig scripts/tsconfig.json scripts/verify-notify.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

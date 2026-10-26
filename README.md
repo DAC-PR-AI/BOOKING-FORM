@@ -395,6 +395,54 @@ is a one-line change and is never stretched. With no file present the header fal
 the wordmark as type with a visible "logo placeholder" note, so a missing asset is obvious
 rather than silently blank. The corner banners are drawn as shapes and need no artwork.
 
+## Notifications, audit and the project sheet (Phase 7)
+
+* **The in-app queue is the system of record.** `/notifications`, with an unread count in the
+  header. Email is a best-effort digest layered on top, because Resend's free tier allows
+  **100 messages a day** — not 3,000 a month as the monthly figure suggests — and one email
+  per signature would run out at about eleven bookings.
+* **Notifications are dispatched after the transaction commits, never inside it.** A
+  signature that is safely recorded but unannounced is recoverable; a signature rolled back
+  because a notification failed is not. Every dispatch swallows and logs its own errors.
+* **A step that opens reaches every active holder of its role**, because the step is
+  unassigned until somebody claims it — telling one named person would be telling the wrong
+  person half the time. Applicant steps go to the creator, who performs the capture.
+* **Nothing downstream is told before its turn**, and the person who returns a booking is not
+  notified about their own action.
+* **No notification carries a PAN or Aadhaar.** They reach email, which leaves India, so
+  this is asserted in both the unit tests and the verification run.
+
+`/admin/audit` is a reader over the append-only trail, filterable by group and searchable by
+booking, person or detail. PAN and Aadhaar never reach those rows — `redact()` strips them on
+the way in — so the whole payload is safe to show.
+
+### The project sheet (PLAN.md §2A)
+
+`Admin → Projects` has a **Preview** and a **Sync now**, plus a daily cron at 08:00 IST.
+
+* **The booking form reads Postgres, never Google.** If the sheet is unavailable, staff lose
+  access to *new* project names — not the ability to book, and not any existing booking's
+  project.
+* **Upsert by a stable code, never by name.** Keyed on the name, fixing a typo in the sheet
+  silently creates a duplicate project and splits the reporting; keyed on a code, the same
+  edit is a rename. If the sheet has no code column one is derived and the admin screen says
+  so, because derived codes reintroduce exactly that problem.
+* **A project that disappears from the sheet is deactivated, never deleted** — a booking from
+  six months ago must still resolve its project name. Projects added by hand have no code and
+  are left strictly alone.
+* **Preview exists because a sync can hide projects.** It runs the same plan and writes
+  nothing, so an admin sees what would change before committing to it.
+* Reading the sheet is about sixty lines of JWT and `fetch` (`src/lib/google/sheets.ts`)
+  rather than the `googleapis` package, which is tens of megabytes for two HTTP calls on a
+  platform with a bundle size limit. Read-only scope.
+
+Unconfigured, the sync reports itself as not configured and everything else works — see
+`.env.example` for the four variables and the expected columns.
+
+```bash
+npm run verify:notify    # 16 checks: who gets told, and what notifications may carry
+```
+
 ## Security notes
 
 * Passwords: **Argon2id** (`@node-rs/argon2`), m=19456 t=2 p=1, per OWASP.

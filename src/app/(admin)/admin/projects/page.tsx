@@ -2,7 +2,9 @@ import type { Metadata } from 'next';
 import { prisma } from '@/lib/db';
 import { requireAdmin } from '@/lib/auth/rbac';
 import { PageHeader, EmptyState } from '@/components/ui/page-header';
+import { syncStatus } from '@/lib/projects/sync';
 import { ProjectForm } from './project-form';
+import { SyncPanel } from './sync-panel';
 import { toggleProjectActive } from './actions';
 
 export const metadata: Metadata = { title: 'Projects' };
@@ -11,10 +13,13 @@ export const dynamic = 'force-dynamic';
 export default async function AdminProjectsPage() {
   const admin = await requireAdmin();
 
-  const projects = await prisma.project.findMany({
-    where: { organizationId: admin.organizationId },
-    orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
-  });
+  const [projects, status] = await Promise.all([
+    prisma.project.findMany({
+      where: { organizationId: admin.organizationId },
+      orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
+    }),
+    syncStatus(admin.organizationId),
+  ]);
 
   return (
     <>
@@ -23,10 +28,13 @@ export default async function AdminProjectsPage() {
         description="Projects available in the booking form's Project Name dropdown."
       />
 
+      <SyncPanel status={status} />
+
       <p className="mb-6 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
-        These will be synced from your Google Sheet in Phase 7. Until the sheet exists,
-        add them here. Projects are <strong>deactivated, never deleted</strong>, so
-        existing bookings keep resolving their project.
+        The booking form reads this list, never Google directly — so if the sheet is
+        unavailable, staff lose access to <em>new</em> project names, not the ability to
+        book. Projects are <strong>deactivated, never deleted</strong>, so existing bookings
+        keep resolving their project.
       </p>
 
       <div className="mb-8">

@@ -2,6 +2,7 @@ import Link from 'next/link';
 import type { RoleName } from '@prisma/client';
 import { logout } from '@/app/(auth)/login/actions';
 import type { SessionUser } from '@/lib/auth/session';
+import { unreadCount } from '@/lib/notify/dispatch';
 
 type NavItem = { href: string; label: string };
 
@@ -10,8 +11,10 @@ function navFor(role: RoleName): NavItem[] {
     case 'ADMIN':
       return [
         { href: '/dashboard', label: 'Dashboard' },
+        { href: '/forms', label: 'All Forms' },
         { href: '/admin/users', label: 'Users' },
         { href: '/admin/projects', label: 'Projects' },
+        { href: '/admin/audit', label: 'Audit' },
       ];
     case 'SALES_EXECUTIVE':
       return [
@@ -31,7 +34,7 @@ function navFor(role: RoleName): NavItem[] {
   }
 }
 
-export function AppShell({
+export async function AppShell({
   user,
   children,
 }: {
@@ -39,6 +42,7 @@ export function AppShell({
   children: React.ReactNode;
 }) {
   const nav = navFor(user.role.name);
+  const unread = await unreadCount(user.id);
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -67,6 +71,23 @@ export function AppShell({
           </nav>
 
           <div className="ml-auto flex items-center gap-3">
+            <Link
+              href="/notifications"
+              className="relative rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 transition hover:bg-gray-50"
+              aria-label={
+                unread === 0
+                  ? 'Notifications'
+                  : `Notifications, ${unread} unread`
+              }
+            >
+              Notifications
+              {unread > 0 ? (
+                <span className="ml-1.5 inline-flex min-w-4 items-center justify-center rounded-full bg-dac-orange-500 px-1 text-[10px] font-semibold text-white">
+                  {unread > 99 ? '99+' : unread}
+                </span>
+              ) : null}
+            </Link>
+
             <span className="text-right text-xs leading-tight">
               <span className="block font-medium text-gray-900">{user.name}</span>
               <span className="block text-gray-500">{user.role.label}</span>

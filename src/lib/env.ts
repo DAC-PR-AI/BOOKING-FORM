@@ -40,6 +40,15 @@ const schema = z.object({
   SUPABASE_REGION: z.string().optional(),
   /// Escape hatch for self-hosting on a real disk; never set this on Vercel.
   ALLOW_LOCAL_STORAGE: z.enum(['yes']).optional(),
+
+  // --- Google Sheets project sync (Phase 7) --------------------------------
+  // Optional: with these unset the project list is maintained by hand in the
+  // admin screen and the sync simply reports itself as not configured. The
+  // booking form never reads Google directly either way (PLAN.md §2A).
+  GOOGLE_SERVICE_ACCOUNT_EMAIL: z.string().optional(),
+  GOOGLE_PRIVATE_KEY: z.string().optional(),
+  GOOGLE_PROJECTS_SHEET_ID: z.string().optional(),
+  GOOGLE_PROJECTS_SHEET_TAB: z.string().optional(),
 });
 
 export type Env = z.infer<typeof schema>;
