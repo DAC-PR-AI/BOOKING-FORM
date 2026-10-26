@@ -104,6 +104,21 @@ export function boxGroups(count: number, groups?: readonly number[]): number[] {
   return [...groups];
 }
 
+/**
+ * The DAC wordmark, top right.
+ *
+ * The width comes from the photograph: the printed logo spans roughly an
+ * eighth of the form's content width. The height follows the supplied
+ * artwork's own aspect ratio (640 × 280) rather than a guessed box, so it is
+ * never letterboxed or stretched. If the artwork is replaced with a different
+ * shape, change `aspectRatio` here and nothing else.
+ */
+export const LOGO = { width: 68, aspectRatio: 640 / 280 } as const;
+
+export function logoHeight(): number {
+  return LOGO.width / LOGO.aspectRatio;
+}
+
 /** The photo box printed to the left of each applicant block. */
 export const PHOTO_BOX = { width: 78, height: 104 } as const;
 

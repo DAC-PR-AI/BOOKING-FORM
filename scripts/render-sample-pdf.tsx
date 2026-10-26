@@ -5,6 +5,7 @@ import { renderToBuffer } from '@react-pdf/renderer';
 import { BookingFormPdf } from '../src/components/pdf/booking-form-pdf';
 import { SIGNATURE_GRID } from '../src/lib/pdf/form-layout';
 import { samplePng } from '../src/lib/pdf/sample-image';
+import { readLogo } from '../src/lib/pdf/data';
 import type { PdfApplicant, PdfData, PdfSignature } from '../src/lib/pdf/data';
 
 /**
@@ -139,7 +140,9 @@ function baseData(signatures: Record<string, PdfSignature>): PdfData {
 
     signatures,
     terms: { version: 'v1', body: realTermsBody() ?? TERMS_BODY },
-    logoDataUrl: null,
+    // The real brand asset when one is present, so the sample shows what the
+    // generated PDF will actually show rather than always the placeholder.
+    logoDataUrl: process.argv.includes('--no-logo') ? null : readLogo(),
     generatedAt: new Date(),
   };
 }

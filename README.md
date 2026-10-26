@@ -388,9 +388,12 @@ labels** are present, in the order the paper prints them, along with the booking
 the full PAN and Aadhaar, and the ticked options. A dropped ribbon or a section rendered in
 the wrong place fails the run instead of being noticed months later.
 
-> **No brand assets yet.** `public/brand/logo.png` is read at render time if it exists;
-> until then the header prints the wordmark as type with a visible "logo placeholder" note.
-> Drop a file in and it is picked up — no code change.
+**Brand assets** live in `public/brand/` and are read at render time, so replacing one needs
+no code change and no restart. `dac-logo.png` is in place; the header box is sized from the
+artwork's own aspect ratio (`LOGO` in `form-layout.ts`), so a differently shaped replacement
+is a one-line change and is never stretched. With no file present the header falls back to
+the wordmark as type with a visible "logo placeholder" note, so a missing asset is obvious
+rather than silently blank. The corner banners are drawn as shapes and need no artwork.
 
 ## Security notes
 

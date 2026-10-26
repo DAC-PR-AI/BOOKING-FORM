@@ -141,7 +141,7 @@ async function embed(storageKey: string, mimeType: string): Promise<string | nul
  * development. Until one exists the header prints the wordmark as type, which
  * is legible and obviously a placeholder rather than a silent blank.
  */
-function readLogo(): string | null {
+export function readLogo(): string | null {
   for (const name of ['logo.png', 'logo.jpg', 'logo.jpeg', 'dac-logo.png']) {
     const path = resolve(process.cwd(), 'public', 'brand', name);
     if (!existsSync(path)) continue;

@@ -15,6 +15,7 @@ import {
   CONTENT_WIDTH,
   DOB_GROUPS,
   FONT,
+  LOGO,
   PAGE_MARGIN,
   PHOTO_BOX,
   RULE,
@@ -29,6 +30,7 @@ import {
   boxGroups,
   charactersFor,
   dobCharacters,
+  logoHeight,
 } from '@/lib/pdf/form-layout';
 import { parseTerms } from '@/lib/forms/terms-markdown';
 import type { PdfApplicant, PdfData, PdfSignature } from '@/lib/pdf/data';
@@ -97,7 +99,7 @@ const styles = StyleSheet.create({
   },
 
   header: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 2 },
-  logoImage: { width: 74, height: 26, objectFit: 'contain' },
+  logoImage: { width: LOGO.width, height: logoHeight(), objectFit: 'contain' },
   logoText: { fontSize: 19, fontFamily: 'Helvetica-Bold', letterSpacing: 1.5 },
   logoPlaceholderNote: { fontSize: 4.5, color: COLOURS.placeholder, textAlign: 'right' },
 
