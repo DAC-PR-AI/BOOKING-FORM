@@ -38,3 +38,21 @@ export async function verifyPassword(storedHash: string, plain: string): Promise
     return false;
   }
 }
+
+/**
+ * A real Argon2id hash of a value nobody knows, used to burn the same time on
+ * a login for an account that does not exist.
+ *
+ * Without this, an unknown email returns in a millisecond while a known one
+ * spends ~100ms in Argon2 — a timing oracle that enumerates staff addresses
+ * just as effectively as a distinct error message would, which is precisely
+ * what the single generic message exists to prevent.
+ *
+ * Computed once, lazily: hashing on module load would cost every cold start.
+ */
+let decoyHash: Promise<string> | null = null;
+
+export function burnPasswordTime(plain: string): Promise<boolean> {
+  decoyHash ??= hashPassword(`decoy:${Math.random()}:${Date.now()}`);
+  return decoyHash.then((stored) => verifyPassword(stored, plain));
+}

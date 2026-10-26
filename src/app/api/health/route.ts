@@ -12,8 +12,12 @@ import { storageStatus } from '@/lib/storage';
  *
  * Pinned to Mumbai like every other data route.
  */
+// Region pinning lives in vercel.json ("regions": ["bom1"]), not in a route
+// segment export: Next 16 deprecated `preferredRegion`, and Vercel now accepts
+// only 'auto' | 'global' | 'home' there — an unsupported value throws at deploy
+// time. The project-level setting pins every function to Mumbai, which is what
+// the residency rule needs.
 export const runtime = 'nodejs';
-export const preferredRegion = 'bom1';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request): Promise<NextResponse> {

@@ -27,7 +27,10 @@
     "verify:submit": "tsx --tsconfig scripts/tsconfig.json scripts/verify-submit.ts",
     "verify:sign": "tsx --tsconfig scripts/tsconfig.json scripts/verify-sign.ts",
     "verify:pdf": "tsx --tsconfig scripts/tsconfig.json scripts/verify-pdf.ts",
-    "verify:notify": "tsx --tsconfig scripts/tsconfig.json scripts/verify-notify.ts"
+    "verify:notify": "tsx --tsconfig scripts/tsconfig.json scripts/verify-notify.ts",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "dev:clean": "tsx --tsconfig scripts/tsconfig.json scripts/dev-clean.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -48,6 +51,7 @@
     "zod": "4.6.7"
   },
   "devDependencies": {
+    "@playwright/test": "^1.57.0",
     "@tailwindcss/postcss": "4.3.3",
     "@types/node": "26.6.5",
     "@types/pg": "^8.23.1",

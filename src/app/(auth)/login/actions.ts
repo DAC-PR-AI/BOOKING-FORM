@@ -3,7 +3,7 @@
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/db';
-import { verifyPassword } from '@/lib/auth/password';
+import { burnPasswordTime, verifyPassword } from '@/lib/auth/password';
 import { createSession, destroySession } from '@/lib/auth/session';
 import { homePathFor } from '@/lib/auth/rbac';
 import { audit } from '@/lib/audit/log';
@@ -49,10 +49,12 @@ export async function login(
     include: { role: true },
   });
 
-  // Unknown account: still spend time hashing-ish work? Not needed here — the
-  // lookup is indexed and constant enough, and the generic message plus
-  // lockout on real accounts is what actually matters.
   if (!user || !user.isActive) {
+    // Spend the same time Argon2 would have spent on a real account. Returning
+    // straight away here would make an unknown address answer in a millisecond
+    // and a known one in ~100ms — a timing oracle that enumerates staff email
+    // addresses just as well as a distinct message, defeating GENERIC_ERROR.
+    await burnPasswordTime(password);
     return { error: GENERIC_ERROR };
   }
 

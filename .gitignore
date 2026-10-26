@@ -30,3 +30,9 @@ backups/
 
 # agent tooling — local skill links, resolved from .agents/
 .claude/
+
+# playwright
+test-results/
+playwright-report/
+blob-report/
+.playwright/

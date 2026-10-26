@@ -22,10 +22,26 @@ import { isSafeKey } from './keys';
  *
  * Files live OUTSIDE the repository (default `../dac-storage`) so an upload
  * can never be committed or served as a static asset.
+ *
+ * ## Why every fs call carries `turbopackIgnore`
+ *
+ * The paths here are built at runtime from a storage key. Turbopack sees a
+ * dynamic filesystem read it cannot resolve statically and responds by tracing
+ * **the whole project** into the deployment output — every source file and the
+ * entire `public/` folder — in case one of them is what gets read. That bloats
+ * the bundle and can breach Vercel's size limit, and it is caused entirely by
+ * a driver that refuses to run in production anyway.
+ *
+ * The annotations tell the tracer these paths are not project files — the
+ * path-building calls as well as the reads, since Turbopack treats a
+ * dynamically composed path as filesystem access in its own right. They change
+ * no behaviour: `absolutePathFor` is still what keeps a key inside the storage
+ * root, and it is still checked after resolution.
  */
 
 const STORAGE_ROOT = resolve(
-  process.env.LOCAL_STORAGE_DIR ?? resolve(process.cwd(), '..', 'dac-storage'),
+  /*turbopackIgnore: true*/
+  process.env.LOCAL_STORAGE_DIR ?? resolve(/*turbopackIgnore: true*/ process.cwd(), '..', 'dac-storage'),
 );
 
 /**
@@ -38,7 +54,7 @@ function absolutePathFor(key: string): string {
     throw new Error('Unsafe storage key.');
   }
 
-  const full = resolve(join(STORAGE_ROOT, key));
+  const full = resolve(/*turbopackIgnore: true*/ join(/*turbopackIgnore: true*/ STORAGE_ROOT, key));
   if (full !== STORAGE_ROOT && !full.startsWith(STORAGE_ROOT + sep)) {
     throw new Error('Storage key escaped the storage root.');
   }
@@ -88,11 +104,11 @@ export async function writeLocalObject(
   contentType: string,
 ): Promise<void> {
   const path = absolutePathFor(key);
-  await mkdir(dirname(path), { recursive: true });
-  await writeFile(path, body);
+  await mkdir(/*turbopackIgnore: true*/ dirname(path), { recursive: true });
+  await writeFile(/*turbopackIgnore: true*/ path, body);
   // The content type is not recoverable from the bytes, and guessing from the
   // extension would be a second source of truth. Keep it beside the object.
-  await writeFile(`${path}.type`, contentType, 'utf8');
+  await writeFile(/*turbopackIgnore: true*/ `${path}.type`, contentType, 'utf8');
 }
 
 export const localDriver: StorageDriver = {
@@ -126,10 +142,10 @@ export const localDriver: StorageDriver = {
 
   async get(key): Promise<StoredObject> {
     const path = absolutePathFor(key);
-    const body = await readFile(path);
+    const body = await readFile(/*turbopackIgnore: true*/ path);
     let contentType = 'application/octet-stream';
     try {
-      contentType = (await readFile(`${path}.type`, 'utf8')).trim() || contentType;
+      contentType = (await readFile(/*turbopackIgnore: true*/ `${path}.type`, 'utf8')).trim() || contentType;
     } catch {
       // Sidecar missing — an object written before the sidecar existed, or a
       // partial write. The generic type is safe: the browser will download
@@ -141,10 +157,10 @@ export const localDriver: StorageDriver = {
   async stat(key) {
     try {
       const path = absolutePathFor(key);
-      const info = await fsStat(path);
+      const info = await fsStat(/*turbopackIgnore: true*/ path);
       let contentType = 'application/octet-stream';
       try {
-        contentType = (await readFile(`${path}.type`, 'utf8')).trim() || contentType;
+        contentType = (await readFile(/*turbopackIgnore: true*/ `${path}.type`, 'utf8')).trim() || contentType;
       } catch {
         /* as in get() */
       }
@@ -156,8 +172,8 @@ export const localDriver: StorageDriver = {
 
   async remove(key): Promise<void> {
     const path = absolutePathFor(key);
-    await rm(path, { force: true });
-    await rm(`${path}.type`, { force: true });
+    await rm(/*turbopackIgnore: true*/ path, { force: true });
+    await rm(/*turbopackIgnore: true*/ `${path}.type`, { force: true });
   },
 };
 

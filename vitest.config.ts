@@ -11,6 +11,16 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': resolve(import.meta.dirname, './src'),
+      // `server-only` is a build-time guard, not behaviour: its real package
+      // throws unless Node resolves under the `react-server` condition, which
+      // is how a mistaken import into a client bundle becomes an error. Vitest
+      // does not use that condition, so a module carrying the guard cannot be
+      // unit tested at all without this.
+      //
+      // Stubbed here only. `npm run build` still fails if server-only code is
+      // ever pulled into a client bundle, which is where the guard earns its
+      // place.
+      'server-only': resolve(import.meta.dirname, './scripts/stubs/server-only.ts'),
     },
   },
 });

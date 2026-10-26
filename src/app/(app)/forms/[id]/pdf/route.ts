@@ -19,8 +19,12 @@ import { getOrCreatePdf } from '@/lib/pdf/render';
  * downloads.
  */
 
+// Region pinning lives in vercel.json ("regions": ["bom1"]), not in a route
+// segment export: Next 16 deprecated `preferredRegion`, and Vercel now accepts
+// only 'auto' | 'global' | 'home' there — an unsupported value throws at deploy
+// time. The project-level setting pins every function to Mumbai, which is what
+// the residency rule needs.
 export const runtime = 'nodejs';
-export const preferredRegion = 'bom1';
 export const dynamic = 'force-dynamic';
 /** Generation is the slow path; Hobby caps at 10s, Pro allows more. */
 export const maxDuration = 60;

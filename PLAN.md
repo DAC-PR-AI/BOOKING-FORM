@@ -529,9 +529,22 @@ Estimates in working days, one engineer.
 | 2 | The form replica: all fields, `BoxInput`, auto-uppercase, Zod validation, autosave draft, My Forms list | 5–6 d | create and save a draft; refresh loses nothing; validation fires | **images**, Q3, Q4 |
 | 3 | Documents: data-driven checklist, signed-URL direct upload, client compression, preview/replace, photo boxes wired into the sheet | 3–4 d | upload, preview, replace; oversize rejected; submit blocked while a mandatory doc is missing | Q2, Q13 |
 
-**Phases 1–7 are complete.** Phase 3 added a storage-driver abstraction that was not in the
+**All eight phases are complete.** Phase 3 added a storage-driver abstraction that was not in the
 original plan — see §3A. Phase 4 completed the Phase 3 test row: submit is now gated on the
 mandatory-document set.
+
+Phase 8 caught two things that would have broken the first deploy, both recorded in the
+README: `preferredRegion = 'bom1'` is deprecated in Next 16 and *throws* on Vercel, which now
+accepts only `'auto' | 'global' | 'home'` there; and the local storage driver's dynamic
+filesystem access made Turbopack trace the entire project — `public/` included — into the
+deployment output. It also closed a login **timing oracle**: an unknown address returned
+instantly while a real one spent ~100ms in Argon2, which enumerates staff email addresses
+just as well as a distinct error message would.
+
+The one Phase 8 item that cannot be done from here is **step 4 of the deployment checklist**:
+confirming the execution region of `proxy.ts` from Vercel's function logs, open since Phase 1.
+The file is cookie-presence-only so the answer cannot leak anything either way, but it should
+be confirmed on the first real deploy.
 
 Phase 7 is complete except for **connecting** the Google Sheet, which waits on DAC creating
 it — agreed as the last step from the outset. The sync itself is built, tested and reports

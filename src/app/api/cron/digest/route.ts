@@ -13,8 +13,12 @@ import { runDigest } from '@/lib/notify/run-digest';
  * system of record and is completely unaffected by whether this runs.
  */
 
+// Region pinning lives in vercel.json ("regions": ["bom1"]), not in a route
+// segment export: Next 16 deprecated `preferredRegion`, and Vercel now accepts
+// only 'auto' | 'global' | 'home' there — an unsupported value throws at deploy
+// time. The project-level setting pins every function to Mumbai, which is what
+// the residency rule needs.
 export const runtime = 'nodejs';
-export const preferredRegion = 'bom1';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 

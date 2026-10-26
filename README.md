@@ -4,7 +4,7 @@ Digitises the DAC Developers paper **Booking Form** (page 1) and **Terms & Condi
 Provisional Allotment** (page 2), with supporting-document upload and a sequential
 nine-step signature workflow.
 
-**Status: Phase 7 of 8 complete.**
+**Status: Phase 8 of 8 complete — ready to deploy.**
 
 * **Phase 1** — project setup, data model, authentication, RBAC, app shell, admin project CRUD.
 * **Phase 2** — the digital booking form: all paper fields in order, the boxed character
@@ -20,8 +20,11 @@ nine-step signature workflow.
   and an automated fidelity check.
 * **Phase 7** — notifications and the nightly digest, the audit viewer, the free-tier
   meters, and the Google Sheet project sync.
+* **Phase 8** — hardening: a Content-Security-Policy, the login timing oracle closed, error
+  boundaries, 26 end-to-end tests in a real browser, and a clean production build.
 
-See `PLAN.md` §10 for the full phase plan. Next: Phase 8, hardening and deployment.
+See `PLAN.md` §10 for the full phase plan. What remains is **configuration, not code** — see
+*Before production* at the foot of this file.
 
 | Document | What's in it |
 |---|---|
@@ -133,7 +136,15 @@ All on `.test`, which cannot receive real email. The seed refuses to run with
 | `npm run build` | `prisma generate` + production build |
 | `npm run lint` | ESLint |
 | `npm run typecheck` | `tsc --noEmit` |
-| `npm test` | Vitest unit tests |
+| `npm test` | Vitest unit tests (516) |
+| `npm run test:e2e` | Playwright, in a real browser (26) |
+| `npm run fixture` | A complete booking to click through (`-- --joint --complete`) |
+| `npm run dev:clean` | Delete test bookings and their files |
+| `npm run verify:storage` | Storage round trip, against the real driver |
+| `npm run verify:submit` | The submit gate, Booking IDs, the flow engine |
+| `npm run verify:sign` | All nine signatures, the return, the resume |
+| `npm run verify:pdf` | PDF generation and the 61-label fidelity check |
+| `npm run verify:notify` | Who gets told, and what notifications may carry |
 | `npm run db:migrate` | Create/apply a migration (dev) |
 | `npm run db:deploy` | Apply migrations (production) |
 | `npm run db:seed` | Seed reference data |
@@ -482,6 +493,63 @@ npm run verify:notify    # 16 checks: who gets told, and what notifications may 
   **404, not 403**, so a signatory cannot learn that a booking exists.
 * PAN and Aadhaar are **AES-256-GCM encrypted** at rest with a separate last-4 column for
   lists.
+
+## Hardening (Phase 8)
+
+* **A Content-Security-Policy** on every response, plus `frame-ancestors 'none'`,
+  `object-src 'none'`, `form-action 'self'` and `base-uri 'self'` — the directives that block
+  the common attacks without needing a nonce. There is no nonce **by choice**: generating one
+  means logic in `proxy.ts`, and that file is held to cookie-presence-only because Vercel may
+  run it outside India. Residency is a legal obligation; CSP is defence in depth. The storage
+  host is allowed in `img-src`, since documents and signatures are served by redirecting to a
+  signed URL on it.
+* **The login timing oracle is closed.** An unknown email used to return in a millisecond
+  while a real one spent ~100ms in Argon2 — enough to enumerate staff addresses by timing,
+  which is exactly what the single generic error message exists to prevent. Unknown accounts
+  now verify against a decoy hash so both paths cost the same.
+* **Error boundaries** at the segment, route and root-layout level. They deliberately say
+  nothing about what failed: an error from a booking system can carry a Booking ID, an
+  applicant's name or a database constraint, and the page is reachable by anyone with a
+  session. The `digest` ties a report to the server log without putting anything in the
+  browser. Nothing is sent to a third-party error tracker — the brief forbids it.
+* **The 404 page serves double duty.** `requireRole` and `authoriseFormAccess` call
+  `notFound()` rather than returning 403, so its wording has to be true both for a page that
+  does not exist and for one that is not yours.
+
+### Two deployment bugs this phase caught
+
+* **`preferredRegion = 'bom1'` would have failed the deploy.** Next 16 deprecated the export,
+  and Vercel now accepts only `'auto' | 'global' | 'home'` there — an unsupported value
+  throws. Region pinning belongs in `vercel.json`, which is where it now lives exclusively.
+* **The local storage driver was dragging the whole project into the deployment.** Turbopack
+  saw a filesystem read it could not resolve statically and traced every source file and the
+  entire `public/` folder into the output, in case one of them was the target. Caused
+  entirely by a driver that refuses to run in production. The path-building and read calls
+  now carry `turbopackIgnore`, and the build is warning-free.
+
+## Deploying
+
+```bash
+npm run typecheck && npm run lint && npm test && npm run build
+npm run test:e2e          # needs a database and a seeded org
+```
+
+1. **Supabase**, region `ap-south-1` (Mumbai). Create a **private** bucket named by
+   `SUPABASE_STORAGE_BUCKET`. Copy the connection string into `DATABASE_URL` and the
+   service-role key into `SUPABASE_SERVICE_ROLE_KEY`; storage switches over on its own.
+2. `npm run db:deploy` to apply migrations, then `npm run db:seed` **once**, with
+   `SEED_PASSWORD` set to something real. Change every demo password immediately, or create
+   real accounts and deactivate the demo ones.
+3. **Vercel**: import the repo, set every variable from `.env.example`, and confirm the
+   project region is **Mumbai**. `vercel.json` pins functions to `bom1` and registers three
+   crons (health keep-alive, project sync, digest).
+4. **Verify the region of `proxy.ts` in the function logs.** PLAN.md §3 has flagged this as
+   unresolved since Phase 1: Vercel documents Routing Middleware as deploying to all regions
+   regardless of the `regions` setting, and whether the renamed Node-runtime proxy still does
+   is not settled. It is cookie-presence-only precisely so the answer cannot matter — but
+   confirm it, and keep it that way.
+5. Approve `content/terms/v1.md` and set `tnc_versions.is_approved` before a real customer
+   signs. Production refuses to submit against an unapproved version.
 
 ## Before production
 
