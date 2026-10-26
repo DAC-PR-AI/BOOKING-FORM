@@ -19,7 +19,14 @@
     "db:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
-    "db:reset": "prisma migrate reset --force"
+    "db:reset": "prisma migrate reset --force",
+    "fixture": "tsx --tsconfig scripts/tsconfig.json scripts/dev-fixture.ts",
+    "dev:session": "tsx --tsconfig scripts/tsconfig.json scripts/dev-session.ts",
+    "pdf:sample": "tsx --tsconfig scripts/tsconfig.json scripts/render-sample-pdf.tsx",
+    "verify:storage": "tsx --tsconfig scripts/tsconfig.json scripts/verify-storage.ts",
+    "verify:submit": "tsx --tsconfig scripts/tsconfig.json scripts/verify-submit.ts",
+    "verify:sign": "tsx --tsconfig scripts/tsconfig.json scripts/verify-sign.ts",
+    "verify:pdf": "tsx --tsconfig scripts/tsconfig.json scripts/verify-pdf.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -28,6 +35,7 @@
     "@node-rs/argon2": "2.2.2",
     "@prisma/adapter-pg": "^7.10.1",
     "@prisma/client": "7.10.1",
+    "@react-pdf/renderer": "^4.9.0",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.118.0",
     "dotenv": "^18.0.8",

@@ -4,7 +4,7 @@ Digitises the DAC Developers paper **Booking Form** (page 1) and **Terms & Condi
 Provisional Allotment** (page 2), with supporting-document upload and a sequential
 nine-step signature workflow.
 
-**Status: Phase 5 of 8 complete.**
+**Status: Phase 6 of 8 complete.**
 
 * **Phase 1** — project setup, data model, authentication, RBAC, app shell, admin project CRUD.
 * **Phase 2** — the digital booking form: all paper fields in order, the boxed character
@@ -16,8 +16,11 @@ nine-step signature workflow.
   flow engine, and the booking status timeline.
 * **Phase 5** — the signatory portal, signature capture, in-person applicant capture with
   witness, the Co-ordinator's validate step, and return/resume.
+* **Phase 6** — PDF generation: both pages of the paper form, write-once with a SHA-256,
+  and an automated fidelity check.
 
-See `PLAN.md` §10 for the full phase plan. Next: Phase 6, PDF generation.
+See `PLAN.md` §10 for the full phase plan. Next: Phase 7, notifications, admin screens and
+the Google Sheet sync.
 
 | Document | What's in it |
 |---|---|
@@ -234,7 +237,7 @@ All personal data must physically reside in **India**.
   unless the project region is `ap-south-1`, and `/api/health` reports the live driver and
   its residency so a misconfigured deploy is visible rather than silent.
 
-`npx tsx --conditions=react-server scripts/verify-storage.ts` exercises the whole pipeline
+`npm run verify:storage` exercises the whole pipeline
 against the real database and the configured driver, then cleans up after itself.
 
 ## Submit and the signature flow (Phase 4)
@@ -278,18 +281,22 @@ against the real database and the configured driver, then cleans up after itself
 
 ```bash
 # A complete draft that passes the gate, printed with its URLs.
-npx tsx --conditions=react-server scripts/dev-fixture.ts          # add --empty or --joint
+npm run fixture --          # add --empty or --joint
 
 # End-to-end checks against the real database; both clean up after themselves.
-npx tsx --conditions=react-server scripts/verify-submit.ts
-npx tsx --conditions=react-server scripts/verify-storage.ts
+npm run verify:submit
+npm run verify:storage
 
 # A session cookie for curl, for a seeded .test account.
-npx tsx scripts/dev-session.ts exec@dac.test
+npm run dev:session -- exec@dac.test
 ```
 
-`--conditions=react-server` is needed because these scripts import modules marked
-`server-only`, whose default entry point throws outside a React Server Component.
+Each runs with `scripts/tsconfig.json`, which maps `server-only` to a no-op. The scripts
+import application modules that carry that guard, and its real package throws unless Node
+resolves under the `react-server` condition — but `@react-pdf/renderer` needs the ordinary
+React build and breaks under exactly that condition. The two cannot both be satisfied in one
+plain Node process, so the guard is stubbed for scripts only; the application's own tsconfig
+is untouched.
 
 ## Signing (Phase 5)
 
@@ -337,8 +344,53 @@ always the same: read the booking, then sign it or send it back. What differs co
 ```bash
 # 36 checks: all nine steps, the return, the resume, and that the queue query
 # agrees with canActOnStep. Cleans up its bookings and signature objects.
-npx tsx --conditions=react-server scripts/verify-sign.ts
+npm run verify:sign
 ```
+
+## The PDF (Phase 6)
+
+`/forms/{id}/pdf`, linked from the booking page once every signature is in.
+
+* **Both pages, reproduced rather than redesigned**: the header block, the grey section
+  ribbons, the character boxes, the tick squares, the photo boxes, the signature grid, the
+  note printed sideways up the left margin, and page 2's terms with its three signature
+  labels.
+* **Write-once.** A booking produces exactly one PDF, at completion, and later requests
+  serve those same bytes. That is the point of the SHA-256 stored beside it — a hash is
+  worth nothing if the document behind it can quietly change when a layout is tweaked or a
+  project renamed.
+* **It carries PAN and Aadhaar in full.** The brief's masking rule is about *lists*; this is
+  the booking form itself, and the paper original has both numbers written across its boxes.
+  A masked PDF would be a different document. The decrypt happens in one place
+  (`src/lib/pdf/data.ts`), is audited as `VIEW_SENSITIVE` alongside the `PDF` entry, and the
+  output lands in the same private India-resident storage the ciphertext already lives in.
+* **One geometry source.** `src/lib/pdf/form-layout.ts` owns the proportions, box counts and
+  signature-slot mapping. react-pdf is a separate layout engine from the browser (PLAN.md
+  §4), so the sheet is authored twice; this is what stops the two drifting, and what keeps
+  the documented Chromium fallback a renderer swap rather than a rewrite.
+* **The Sales Co-ordinator cell is appended, not squeezed in.** The paper prints eight
+  signature cells; the pipeline has nine steps (OPEN_QUESTIONS Q5). Managing Director (page
+  1) and Authorized Signatory (page 2) stay blank rules for wet signing after download (Q7).
+
+### Checking fidelity
+
+The real gate is holding a print against the photograph — a human judgement. What is
+automated is the part a machine can repeat:
+
+```bash
+npm run verify:pdf -- --keep ./booking-form.pdf   # 24 checks, then writes a copy to look at
+npm run pdf:sample -- ./sample.pdf                # no database; seconds, for layout work
+```
+
+`npm run verify:pdf` builds a booking, signs all nine steps, generates the PDF and then reads
+the text back out of it (`src/lib/pdf/extract-text.ts`) to assert that all **61 printed
+labels** are present, in the order the paper prints them, along with the booking's values,
+the full PAN and Aadhaar, and the ticked options. A dropped ribbon or a section rendered in
+the wrong place fails the run instead of being noticed months later.
+
+> **No brand assets yet.** `public/brand/logo.png` is read at render time if it exists;
+> until then the header prints the wordmark as type with a visible "logo placeholder" note.
+> Drop a file in and it is picked up — no code change.
 
 ## Security notes
 

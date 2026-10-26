@@ -1,0 +1,21 @@
+{
+  // Used only when running the scripts with tsx:
+  //   npx tsx --tsconfig scripts/tsconfig.json scripts/verify-pdf.ts
+  //
+  // It exists for one reason. The scripts import application modules that are
+  // marked `server-only`, whose real package throws unless Node resolves under
+  // the `react-server` condition — but `@react-pdf/renderer` needs the ordinary
+  // React build and fails under that same condition. The two cannot both be
+  // satisfied in one plain Node process, so here `server-only` maps to a no-op
+  // and the condition is not used at all.
+  //
+  // The application's own tsconfig is untouched: the guard still fails a real
+  // build if `server-only` code is pulled into a client bundle.
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@/*": ["../src/*"],
+      "server-only": ["./stubs/server-only.ts"]
+    }
+  }
+}

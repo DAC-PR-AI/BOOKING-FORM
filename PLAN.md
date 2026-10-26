@@ -529,9 +529,25 @@ Estimates in working days, one engineer.
 | 2 | The form replica: all fields, `BoxInput`, auto-uppercase, Zod validation, autosave draft, My Forms list | 5–6 d | create and save a draft; refresh loses nothing; validation fires | **images**, Q3, Q4 |
 | 3 | Documents: data-driven checklist, signed-URL direct upload, client compression, preview/replace, photo boxes wired into the sheet | 3–4 d | upload, preview, replace; oversize rejected; submit blocked while a mandatory doc is missing | Q2, Q13 |
 
-**Phases 1–5 are complete.** Phase 3 added a storage-driver abstraction that was not in the
+**Phases 1–6 are complete.** Phase 3 added a storage-driver abstraction that was not in the
 original plan — see §3A. Phase 4 completed the Phase 3 test row: submit is now gated on the
 mandatory-document set.
+
+Phase 6 resolved the §4 bet. `@react-pdf/renderer` reproduces the sheet acceptably: all 61
+printed labels land in paper order, verified automatically by reading the text back out of the
+generated file. The Chromium fallback stays documented but is **not needed** — and because
+`form-layout.ts` owns the geometry as planned, it remains a renderer swap if the human
+side-by-side pass ever disagrees.
+
+Two things Phase 6 settled that §4 did not anticipate:
+
+* **The PDF prints PAN and Aadhaar in full.** The masking rule in the brief is about lists;
+  this is the booking form itself and the paper carries both numbers. The decrypt is in one
+  function and is audited as `VIEW_SENSITIVE` beside the `PDF` entry.
+* **Scripts cannot use the `react-server` condition.** `server-only` demands it;
+  `@react-pdf/renderer` breaks under it. `scripts/tsconfig.json` stubs the guard for scripts
+  only, which is why every verification script now runs through an `npm run verify:*` script
+  rather than a bare `tsx` invocation.
 
 Phase 5 added two rules that §7 does not express, both recorded here because they are
 judgement calls rather than mechanics:
@@ -616,7 +632,7 @@ checklist claiming a PAN card is on file when it is not.
 | Risk | Sev | Mitigation |
 |---|---|---|
 | ~~Reference images absent~~ → **RESOLVED**; residual risk is image *resolution* (1280×960) for Phase 6 geometry | Low | Field diff done and clean (§0). A 300 dpi scan would help Phase 6 but is not required. |
-| **PDF fidelity** against react-pdf's separate layout engine | **High** | `formLayout.ts` as single geometry source; Chromium fallback kept viable; Phase 6 is an explicit comparison gate, not an assumption. |
+| ~~**PDF fidelity** against react-pdf's separate layout engine~~ → **RESOLVED in Phase 6** | Low | react-pdf reproduces both pages. `src/lib/pdf/form-layout.ts` owns the geometry as planned, and `scripts/verify-pdf.ts` asserts all 61 printed labels are present and in paper order by reading the text back out of the generated file. Chromium fallback documented but unused. Residual risk is cosmetic spacing, which only a human side-by-side pass can judge. |
 | **T&C legal text accuracy** — wrong wording on a signed allotment document | **High** | Strongly prefer you paste the text. If transcribed, every uncertain word is flagged `[?word]` for review; versioned, and each form records the version it was signed under. |
 | **Resend 100/day cap** throttles the flow at ~14 bookings/day | Medium | In-app queue is the source of truth; email best-effort; digest batching; swappable via `Notifier`. |
 | Vercel **middleware runs outside India** | Medium | Cookie-presence-only middleware rule (§3), checked in CI. |

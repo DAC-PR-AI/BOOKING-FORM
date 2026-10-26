@@ -82,6 +82,25 @@ export function buildSignatureKey(input: {
   return `bookings/${form}/signatures/${unique}.png`;
 }
 
+/**
+ * The generated PDF: bookings/{formId}/pdf/{uuid}.pdf
+ *
+ * Write-once. A booking's PDF is generated at completion and never
+ * regenerated, so the random segment is really about never overwriting: if a
+ * second one is ever produced (a corrected T&C version, say), the first stays
+ * addressable and its SHA-256 still proves what was issued.
+ */
+export function buildPdfKey(input: { bookingFormId: string; unique: string }): string {
+  const form = sanitizeSegment(input.bookingFormId);
+  const unique = sanitizeSegment(input.unique);
+
+  if (!form || !unique) {
+    throw new Error('Cannot build a PDF key from empty segments.');
+  }
+
+  return `bookings/${form}/pdf/${unique}.pdf`;
+}
+
 /** Guards a key that arrived from outside before it reaches the filesystem. */
 export function isSafeKey(key: string): boolean {
   if (key.length === 0 || key.length > 512) return false;

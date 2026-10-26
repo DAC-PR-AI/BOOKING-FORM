@@ -639,17 +639,33 @@ async function main(): Promise<void> {
     console.log('\nCleanup');
     let objects = 0;
     for (const id of created) {
+      // Collect the asset ids FIRST. A signature asset is the parent of its
+      // step record, not the child, so deleting the booking cascades the step
+      // records away and leaves the assets orphaned — rows nothing points at
+      // and no route will serve.
       const assets = await prisma.signatureAsset.findMany({
         where: { stepRecord: { flowInstance: { bookingFormId: id } } },
-        select: { storageKey: true },
+        select: { id: true, storageKey: true },
       });
+
       for (const asset of assets) {
         await driver.remove(asset.storageKey).catch(() => undefined);
         objects += 1;
       }
+
       await prisma.bookingForm.delete({ where: { id } }).catch(() => undefined);
+
+      // Now the step records are gone, so nothing references these.
+      await prisma.signatureAsset
+        .deleteMany({ where: { id: { in: assets.map((a) => a.id) } } })
+        .catch(() => undefined);
     }
-    ok(`${created.length} throwaway bookings and ${objects} signature objects deleted`);
+    ok(
+      `${created.length} throwaway bookings, ${objects} signature objects and their asset rows deleted`,
+    );
+
+    const orphans = await prisma.signatureAsset.count({ where: { stepRecord: null } });
+    if (orphans > 0) console.warn(`  ! ${orphans} orphaned signature_assets row(s) left behind`);
 
     const org = await prisma.organization.findFirst();
     if (org) {

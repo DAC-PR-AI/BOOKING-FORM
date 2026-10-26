@@ -28,7 +28,7 @@ const config = [
   },
   {
     // The seed script is a CLI — printing is the point.
-    files: ['prisma/**/*.ts', 'scripts/**/*.ts'],
+    files: ['prisma/**/*.ts', 'scripts/**/*.ts', 'scripts/**/*.tsx'],
     rules: { 'no-console': 'off' },
   },
 ];

@@ -134,7 +134,17 @@ function readTncBody(): string {
     );
   }
 
-  return text.slice(titleIndex).trim();
+  const fromTitle = text.slice(titleIndex);
+
+  // The transcription marks the end of the clauses with a horizontal rule.
+  // Everything after it — the acceptance sentence and the note about where the
+  // signature slots come from — is page furniture that the renderer draws
+  // itself from `form-layout.ts`. Left in, it printed the acceptance line
+  // twice and put an HTML comment on the face of a legal document.
+  const ruleIndex = fromTitle.search(/^\s*---\s*$/m);
+  const clauses = ruleIndex === -1 ? fromTitle : fromTitle.slice(0, ruleIndex);
+
+  return clauses.trim();
 }
 
 async function main(): Promise<void> {

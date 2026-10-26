@@ -183,6 +183,16 @@ export default async function BookingStatusPage({
             </Link>
           </>
         ) : null}
+        {form.status === 'COMPLETED' ? (
+          <a
+            href={`/forms/${form.id}/pdf`}
+            target="_blank"
+            rel="noreferrer"
+            className="rounded-md bg-green-700 px-3 py-2 text-sm font-semibold text-white transition hover:bg-green-800"
+          >
+            Download the signed PDF
+          </a>
+        ) : null}
         <Link
           href={`/forms/${form.id}/documents`}
           className="rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
@@ -204,6 +214,13 @@ export default async function BookingStatusPage({
           My forms
         </Link>
       </div>
+
+      {form.status === 'COMPLETED' ? (
+        <p className="mb-6 rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900">
+          All nine signatures are collected. The PDF is produced once and kept unchanged, with
+          a SHA-256 recorded against it — downloading it again always returns the same document.
+        </p>
+      ) : null}
 
       {form.status === 'RETURNED' ? (
         <p className="mb-6 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">

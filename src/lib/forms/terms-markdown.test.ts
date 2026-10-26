@@ -118,6 +118,37 @@ describe('parseTerms', () => {
     expect(blocks).toHaveLength(2);
   });
 
+  it('drops a horizontal rule, which is a separator and not content', () => {
+    const blocks = parseTerms(['First clause.', '', '---', '', 'Second clause.'].join('\n'));
+    expect(blocks).toHaveLength(2);
+    expect(blocks.every((b) => b.kind === 'paragraph')).toBe(true);
+  });
+
+  it.each(['---', '----', '-----'])('drops a rule written as %s', (rule) => {
+    expect(parseTerms(['A.', '', rule, '', 'B.'].join('\n'))).toHaveLength(2);
+  });
+
+  it('drops an HTML comment rather than printing it on a legal page', () => {
+    const blocks = parseTerms(
+      [
+        'A clause.',
+        '',
+        '<!-- Signature slots are rendered by the app,',
+        '     not stored here -->',
+        '',
+        'Another clause.',
+      ].join('\n'),
+    );
+    expect(blocks).toHaveLength(2);
+    expect(JSON.stringify(blocks)).not.toContain('Signature slots');
+  });
+
+  it('keeps a dash that is part of a sentence', () => {
+    const blocks = parseTerms('Pay within 10 days - no exceptions.');
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]?.kind).toBe('paragraph');
+  });
+
   it('returns nothing for empty input', () => {
     expect(parseTerms('')).toEqual([]);
     expect(parseTerms('   \n\n  ')).toEqual([]);

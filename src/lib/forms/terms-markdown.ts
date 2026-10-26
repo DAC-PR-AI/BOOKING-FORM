@@ -69,6 +69,15 @@ export function parseTerms(markdown: string): TermsBlock[] {
     const lines = chunk.split('\n').filter((line) => line.trim().length > 0);
     if (lines.length === 0) continue;
 
+    const joined = lines.join('\n').trim();
+
+    // A horizontal rule is a separator in the source, not content.
+    if (/^-{3,}$/.test(joined)) continue;
+
+    // An HTML comment is an editorial note. It has no business rendering as
+    // visible text, least of all on the face of a signed document.
+    if (joined.startsWith('<!--')) continue;
+
     const first = lines[0] as string;
 
     if (/^#\s+/.test(first)) {

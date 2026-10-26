@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildDocumentKey,
+  buildPdfKey,
   buildSignatureKey,
   extensionFor,
   formIdFromKey,
@@ -126,6 +127,34 @@ describe('buildSignatureKey', () => {
 
   it('rejects empty segments', () => {
     expect(() => buildSignatureKey({ bookingFormId: '...', unique: 'u' })).toThrow();
+  });
+});
+
+describe('buildPdfKey', () => {
+  it('nests the PDF under the booking', () => {
+    expect(buildPdfKey({ bookingFormId: FORM, unique: 'abc123' })).toBe(
+      `bookings/${FORM}/pdf/abc123.pdf`,
+    );
+  });
+
+  it('produces a key that passes the safety check', () => {
+    expect(isSafeKey(buildPdfKey({ bookingFormId: FORM, unique: 'u' }))).toBe(true);
+  });
+
+  it('never overwrites an earlier PDF in place', () => {
+    expect(buildPdfKey({ bookingFormId: FORM, unique: 'one' })).not.toBe(
+      buildPdfKey({ bookingFormId: FORM, unique: 'two' }),
+    );
+  });
+
+  it('cannot be talked out of its prefix', () => {
+    const key = buildPdfKey({ bookingFormId: '../../../etc', unique: 'u' });
+    expect(key.startsWith('bookings/')).toBe(true);
+    expect(key).not.toContain('..');
+  });
+
+  it('rejects empty segments', () => {
+    expect(() => buildPdfKey({ bookingFormId: '...', unique: 'u' })).toThrow();
   });
 });
 
