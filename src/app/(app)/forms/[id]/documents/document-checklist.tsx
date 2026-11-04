@@ -9,19 +9,6 @@ import {
   requestDocumentUpload,
 } from './actions';
 
-/**
- * The supporting-document checklist.
- *
- * It reads as the tick-list printed on the paper form — one row per document,
- * in the same order, with the mandatory ones marked. The brief is explicit
- * that the digital form should read like the paper one, so this is a list of
- * named slots, not a general-purpose file manager with a drop zone.
- *
- * Each row owns its own upload state. One failing row must not blank out the
- * others, and a slow photo upload must not stop someone attaching the cost
- * sheet in the meantime.
- */
-
 export type SlotView = {
   typeId: string;
   typeKey: string;
@@ -61,11 +48,6 @@ function applicantSuffix(appliesTo: 'PRIMARY' | 'SECONDARY' | null): string | nu
   return null;
 }
 
-/**
- * Uploads with XHR rather than fetch purely for `upload.onprogress` — on a
- * site connection a 3 MB photo is a long silence otherwise, and silence reads
- * as a broken page.
- */
 function putWithProgress(
   url: string,
   method: 'PUT',
@@ -99,27 +81,35 @@ function putWithProgress(
 export function DocumentChecklist({
   bookingFormId,
   editable,
+  canUploadAnytime = editable,
   slots,
   progress,
 }: {
   bookingFormId: string;
   editable: boolean;
+  canUploadAnytime?: boolean;
   slots: SlotView[];
   progress: ProgressView;
 }) {
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <ProgressBanner progress={progress} />
 
-      <ul className="divide-y divide-gray-100 overflow-hidden rounded-lg border border-gray-200 bg-white">
-        {slots.map((slot) => (
-          <DocumentRow
-            key={slot.typeId}
-            bookingFormId={bookingFormId}
-            editable={editable}
-            slot={slot}
-          />
-        ))}
+      <ul className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-xs">
+        {slots.map((slot) => {
+          const rowEditable = slot.required
+            ? editable || (!slot.document && canUploadAnytime)
+            : canUploadAnytime;
+
+          return (
+            <DocumentRow
+              key={slot.typeId}
+              bookingFormId={bookingFormId}
+              editable={rowEditable}
+              slot={slot}
+            />
+          );
+        })}
       </ul>
     </div>
   );
@@ -127,29 +117,56 @@ export function DocumentChecklist({
 
 function ProgressBanner({ progress }: { progress: ProgressView }) {
   const { requiredSatisfied, requiredTotal, complete, missing } = progress;
+  const percent =
+    requiredTotal > 0 ? Math.min(100, Math.round((requiredSatisfied / requiredTotal) * 100)) : 100;
 
   return (
     <div
-      className={`rounded-lg border px-4 py-3 text-sm ${
+      className={`rounded-2xl border p-5 text-sm shadow-2xs ${
         complete
-          ? 'border-green-200 bg-green-50 text-green-900'
-          : 'border-gray-200 bg-white text-gray-700'
+          ? 'border-emerald-200 bg-emerald-50/80 text-emerald-950'
+          : 'border-slate-200 bg-white text-slate-800'
       }`}
     >
-      <p className="font-medium">
-        {complete
-          ? `All ${requiredTotal} required documents are attached.`
-          : `${requiredSatisfied} of ${requiredTotal} required documents attached.`}
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="font-bold">
+          {complete
+            ? `All ${requiredTotal} mandatory KYC documents (Photo, PAN & Aadhaar) are attached — ready to submit.`
+            : `${requiredSatisfied} of ${requiredTotal} mandatory KYC documents attached (Photo, PAN & Aadhaar are required to create/submit).`}
+        </p>
+        <span
+          className={`rounded-full px-2.5 py-0.5 text-xs font-bold tabular-nums ${
+            complete ? 'bg-emerald-600 text-white' : 'bg-dac-navy-50 text-dac-navy-800'
+          }`}
+        >
+          {requiredSatisfied}/{requiredTotal} KYC
+        </span>
+      </div>
+
+      {/* Progress bar */}
+      <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-slate-200/80" aria-hidden="true">
+        <div
+          className={`h-full transition-all duration-300 ${
+            complete ? 'bg-emerald-600' : 'bg-dac-navy-700'
+          }`}
+          style={{ width: `${percent}%` }}
+        />
+      </div>
+
       {!complete && missing.length > 0 ? (
-        <p className="mt-1 text-gray-600">Still needed: {missing.join(', ')}.</p>
-      ) : null}
-      {progress.optionalUploaded > 0 ? (
-        <p className="mt-1 text-gray-600">
-          Plus {progress.optionalUploaded} optional{' '}
-          {progress.optionalUploaded === 1 ? 'document' : 'documents'}.
+        <p className="mt-2.5 text-xs font-medium text-slate-600">
+          Still needed before submitting: <strong className="text-slate-900">{missing.join(', ')}</strong>.
         </p>
       ) : null}
+      <p className="mt-1.5 text-xs text-slate-500">
+        All other documents (1st payment screenshot, simple cost sheet, mail, discount cost sheet)
+        can be uploaded now or at any time later.
+        {progress.optionalUploaded > 0
+          ? ` (${progress.optionalUploaded} additional ${
+              progress.optionalUploaded === 1 ? 'document' : 'documents'
+            } attached)`
+          : ''}
+      </p>
     </div>
   );
 }
@@ -176,8 +193,6 @@ function DocumentRow({
     setState({ kind: 'preparing' });
 
     try {
-      // Shrink photographs before anything else, so the size the server is
-      // asked to authorise is the size actually sent.
       const { file } = await compressImage(picked);
 
       if (!slot.acceptedMimeTypes.includes(file.type.toLowerCase())) {
@@ -250,7 +265,6 @@ function DocumentRow({
         message: error instanceof Error ? error.message : 'Something went wrong.',
       });
     } finally {
-      // Let the same file be picked again after a failure.
       if (inputRef.current) inputRef.current.value = '';
     }
   }
@@ -268,46 +282,63 @@ function DocumentRow({
   }
 
   return (
-    <li className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-start sm:justify-between">
+    <li className="flex flex-col gap-3 px-5 py-4 transition hover:bg-slate-50/70 sm:flex-row sm:items-start sm:justify-between">
       <div className="min-w-0">
-        <p className="text-sm font-medium text-gray-900">
-          {slot.label}
-          {suffix ? <span className="font-normal text-gray-500"> — {suffix}</span> : null}
+        <p className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-900">
+          <span
+            aria-hidden="true"
+            className={`inline-block h-2 w-2 rounded-full ${
+              slot.document
+                ? 'bg-emerald-500'
+                : slot.required
+                  ? 'bg-amber-500'
+                  : 'bg-slate-300'
+            }`}
+          />
+          <span>
+            {slot.label}
+            {suffix ? <span className="font-normal text-slate-500"> — {suffix}</span> : null}
+          </span>
           {slot.required ? (
-            <span className="ml-2 rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700">
-              Required
+            <span className="rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700">
+              Mandatory
             </span>
           ) : (
-            <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">
-              Optional
+            <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700">
+              Upload anytime
             </span>
           )}
+          {slot.document ? (
+            <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+              ✓ Attached
+            </span>
+          ) : null}
         </p>
 
         {slot.helpText ? (
-          <p className="mt-1 text-xs text-gray-500">{slot.helpText}</p>
+          <p className="mt-1 text-xs text-slate-500">{slot.helpText}</p>
         ) : null}
 
         {slot.document ? (
-          <p className="mt-2 truncate text-xs text-gray-600">
+          <p className="mt-2 truncate text-xs text-slate-600">
             <a
               href={`/api/documents/${slot.document.id}`}
               target="_blank"
               rel="noreferrer"
-              className="font-medium text-dac-navy-700 underline underline-offset-2"
+              className="font-semibold text-dac-navy-700 underline underline-offset-2 hover:text-dac-orange-600"
             >
               {slot.document.originalName}
             </a>{' '}
             · {formatBytes(slot.document.sizeBytes)}
           </p>
         ) : (
-          <p className="mt-2 text-xs text-gray-400">
+          <p className="mt-2 text-xs text-slate-400">
             Nothing attached · {describeTypes(slot.acceptedMimeTypes)} · up to {maxMb} MB
           </p>
         )}
 
         {state.kind === 'error' ? (
-          <p role="alert" className="mt-2 text-xs font-medium text-red-700">
+          <p role="alert" className="mt-2 text-xs font-semibold text-red-600">
             {state.message}
           </p>
         ) : null}
@@ -315,7 +346,7 @@ function DocumentRow({
         {state.kind === 'uploading' ? (
           <div className="mt-2 flex items-center gap-2">
             <div
-              className="h-1.5 w-32 overflow-hidden rounded-full bg-gray-200"
+              className="h-1.5 w-32 overflow-hidden rounded-full bg-slate-200"
               role="progressbar"
               aria-valuenow={state.percent}
               aria-valuemin={0}
@@ -327,7 +358,7 @@ function DocumentRow({
                 style={{ width: `${state.percent}%` }}
               />
             </div>
-            <span className="text-xs text-gray-500">{state.percent}%</span>
+            <span className="text-xs font-medium text-slate-500">{state.percent}%</span>
           </div>
         ) : null}
       </div>
@@ -350,7 +381,11 @@ function DocumentRow({
             type="button"
             disabled={busy || isRemoving}
             onClick={() => inputRef.current?.click()}
-            className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
+            className={`rounded-xl px-3.5 py-1.5 text-xs font-semibold shadow-2xs transition disabled:opacity-50 ${
+              slot.document
+                ? 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+                : 'bg-dac-navy-700 text-white hover:bg-dac-navy-900'
+            }`}
           >
             {busyLabel(state) ?? (slot.document ? 'Replace' : 'Upload')}
           </button>
@@ -360,13 +395,17 @@ function DocumentRow({
               type="button"
               disabled={busy || isRemoving}
               onClick={() => handleRemove(slot.document!.id)}
-              className="rounded-md border border-transparent px-2 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-50"
+              className="rounded-xl border border-transparent px-2.5 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-50 disabled:opacity-50"
             >
               {isRemoving ? 'Removing…' : 'Remove'}
             </button>
           ) : null}
         </div>
-      ) : null}
+      ) : (
+        <span className="shrink-0 self-center rounded-lg border border-slate-200 bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-500">
+          Locked
+        </span>
+      )}
     </li>
   );
 }
@@ -378,7 +417,6 @@ function busyLabel(state: RowState): string | null {
   return null;
 }
 
-/** "a JPEG, PNG or PDF" — the picker's filter said in words, for the hint line. */
 function describeTypes(mimeTypes: string[]): string {
   const names = mimeTypes.map((mime) => {
     if (mime === 'application/pdf') return 'PDF';

@@ -22,12 +22,9 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
   const user = await requireRole('SALES_EXECUTIVE', 'ADMIN');
 
   const form = await loadFormForGate(id, user.organizationId);
-  // 404 rather than 403 — do not confirm that someone else's booking exists.
   if (!form) notFound();
   if (user.role.name !== 'ADMIN' && form.createdById !== user.id) notFound();
 
-  // Already submitted: the status page is the right place to be, and it is
-  // also where a successful submit lands.
   if (!SUBMITTABLE.includes(form.status)) redirect(`/forms/${form.id}`);
 
   const { readiness } = await assessForm(form, user.organizationId);
@@ -38,6 +35,38 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
 
   return (
     <div className="mx-auto max-w-4xl">
+      {/* 3-Step Workflow Bar */}
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-2.5 rounded-xl border border-slate-200/90 bg-white px-4 py-3 text-xs shadow-2xs">
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href={`/forms/${form.id}/edit`}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 font-semibold text-dac-navy-700 transition hover:border-dac-navy-300 hover:bg-dac-navy-50"
+          >
+            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-dac-navy-100 text-[10px] text-dac-navy-800">
+              1
+            </span>
+            <span>Booking Form</span>
+          </Link>
+          <span className="text-slate-300" aria-hidden="true">→</span>
+          <Link
+            href={`/forms/${form.id}/documents`}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 font-semibold text-dac-navy-700 transition hover:border-dac-navy-300 hover:bg-dac-navy-50"
+          >
+            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-dac-navy-100 text-[10px] text-dac-navy-800">
+              2
+            </span>
+            <span>Supporting documents</span>
+          </Link>
+          <span className="text-slate-300" aria-hidden="true">→</span>
+          <span className="inline-flex items-center gap-1.5 rounded-lg bg-dac-navy-800 px-2.5 py-1 font-semibold text-white shadow-2xs">
+            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-white/20 text-[10px]">
+              3
+            </span>
+            <span>Review and submit</span>
+          </span>
+        </div>
+      </div>
+
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <PageHeader
           title={form.status === 'RETURNED' ? 'Resubmit Booking Form' : 'Review and Submit'}
@@ -50,23 +79,25 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
         <div className="flex gap-2">
           <Link
             href={`/forms/${form.id}/edit`}
-            className="rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+            className="rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-2xs transition hover:bg-slate-50"
           >
-            Back to the form
+            ← Back to the form
           </Link>
           <Link
             href={`/forms/${form.id}/documents`}
-            className="rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+            className="rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-2xs transition hover:bg-slate-50"
           >
             Documents
           </Link>
         </div>
       </div>
 
-      {/* --- A short summary, so the big numbers are checked before signing --- */}
-      <section className="mb-6 rounded-lg border border-gray-200 bg-white p-4">
-        <h2 className="mb-3 text-sm font-semibold text-gray-900">This booking</h2>
-        <dl className="grid gap-x-8 gap-y-2 text-sm sm:grid-cols-2">
+      {/* --- Executive Summary Card --- */}
+      <section className="mb-6 rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs">
+        <h2 className="mb-3.5 text-xs font-bold tracking-wider text-dac-navy-900 uppercase">
+          This booking
+        </h2>
+        <dl className="grid gap-x-8 gap-y-2.5 text-sm sm:grid-cols-2">
           <Row label="Sole / First Applicant" value={primary?.fullName ?? '—'} />
           <Row label="Co / Second Applicant" value={secondary?.fullName ?? 'None'} />
           <Row label="Project" value={form.project?.name ?? '—'} />
@@ -74,9 +105,8 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
             label="Property"
             value={
               form.propertyType
-                ? `${form.propertyType[0]}${form.propertyType.slice(1).toLowerCase()}${
-                    form.apartmentNo ? ` ${form.apartmentNo}` : ''
-                  }`
+                ? `${form.propertyType[0]}${form.propertyType.slice(1).toLowerCase()}${form.apartmentNo ? ` ${form.apartmentNo}` : ''
+                }`
                 : '—'
             }
           />
@@ -93,12 +123,15 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
 
       {/* --- What is outstanding ------------------------------------------- */}
       {readiness.ready ? (
-        <p className="mb-6 rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900">
-          Every required field is filled and every mandatory document is attached.
-        </p>
+        <div className="mb-6 flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50/90 px-5 py-4 text-sm font-medium text-emerald-950 shadow-2xs">
+          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-xs font-bold text-white">
+            ✓
+          </span>
+          <span>Every required field is filled and every mandatory document is attached.</span>
+        </div>
       ) : (
-        <section className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4">
-          <h2 className="text-sm font-semibold text-red-900">
+        <section className="mb-6 rounded-2xl border border-red-200 bg-red-50/80 p-5 shadow-2xs">
+          <h2 className="text-sm font-bold text-red-900">
             {readiness.issues.length === 1
               ? 'One thing is still outstanding'
               : `${readiness.issues.length} things are still outstanding`}
@@ -108,36 +141,41 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
             be finished in one pass.
           </p>
 
-          <div className="mt-3 space-y-3">
+          <div className="mt-4 space-y-4">
             {groupIssues(readiness.issues).map((group) => (
-              <div key={group.section}>
-                <h3 className="text-xs font-semibold tracking-wide text-red-900 uppercase">
-                  {group.title}
-                </h3>
-                <ul className="mt-1 space-y-0.5 text-sm text-red-900">
+              <div
+                key={group.section}
+                className="rounded-xl border border-red-200/80 bg-white/80 p-3.5"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="text-xs font-bold tracking-wider text-red-900 uppercase">
+                    {group.title}
+                  </h3>
+                  <Link
+                    href={
+                      group.section === 'documents'
+                        ? `/forms/${form.id}/documents`
+                        : `/forms/${form.id}/edit`
+                    }
+                    className="rounded-md bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-900 transition hover:bg-red-200"
+                  >
+                    {group.section === 'documents' ? 'Go to documents →' : 'Go to the form →'}
+                  </Link>
+                </div>
+                <ul className="mt-2 space-y-1 text-sm text-red-900">
                   {group.issues.map((issue, index) => (
                     <li key={`${issue.field}-${index}`} className="flex gap-2">
-                      <span aria-hidden className="text-red-400">
+                      <span aria-hidden className="text-red-500">
                         •
                       </span>
                       <span>
-                        {issue.field ? <strong className="font-medium">{issue.field}</strong> : null}
+                        {issue.field ? <strong className="font-semibold">{issue.field}</strong> : null}
                         {issue.field ? ' — ' : null}
                         {issue.message}
                       </span>
                     </li>
                   ))}
                 </ul>
-                <Link
-                  href={
-                    group.section === 'documents'
-                      ? `/forms/${form.id}/documents`
-                      : `/forms/${form.id}/edit`
-                  }
-                  className="mt-1 inline-block text-xs font-semibold text-red-900 underline underline-offset-2"
-                >
-                  {group.section === 'documents' ? 'Go to documents' : 'Go to the form'}
-                </Link>
               </div>
             ))}
           </div>
@@ -145,13 +183,13 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
       )}
 
       {/* --- Terms & Conditions, page 2 of the paper ----------------------- */}
-      <section className="mb-6 rounded-lg border border-gray-200 bg-white">
-        <header className="flex flex-wrap items-baseline justify-between gap-2 border-b border-gray-200 px-4 py-3">
-          <h2 className="text-sm font-semibold text-gray-900">
+      <section className="mb-6 overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-xs">
+        <header className="flex flex-wrap items-baseline justify-between gap-2 border-b border-slate-200 bg-slate-50/70 px-5 py-3.5">
+          <h2 className="text-sm font-bold text-slate-900">
             Terms &amp; Conditions for Provisional Allotment
           </h2>
           {terms ? (
-            <span className="text-xs text-gray-500">
+            <span className="text-xs font-medium text-slate-500">
               Version {terms.version} · about {wordCount(terms.body).toLocaleString('en-IN')} words
             </span>
           ) : null}
@@ -160,7 +198,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
         {terms ? (
           <>
             {!terms.isApproved ? (
-              <p className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-900">
+              <p className="border-b border-amber-200 bg-amber-50 px-5 py-2.5 text-xs text-amber-900">
                 <strong>This version has not been approved by DAC.</strong> It was transcribed
                 from a photograph of the paper form and is pending legal review, so it is usable
                 for testing only. Production refuses to submit against an unapproved version.
@@ -172,7 +210,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
             </div>
           </>
         ) : (
-          <p className="px-4 py-4 text-sm text-red-800">
+          <p className="px-5 py-4 text-sm text-red-800">
             No approved Terms &amp; Conditions version is available, so this booking cannot be
             submitted. An administrator must approve a version first.
           </p>
@@ -191,9 +229,9 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex justify-between gap-4 border-b border-gray-100 pb-1">
-      <dt className="text-gray-600">{label}</dt>
-      <dd className="text-right font-medium text-gray-900">{value}</dd>
+    <div className="flex justify-between gap-4 border-b border-slate-100 pb-1.5">
+      <dt className="text-slate-500">{label}</dt>
+      <dd className="text-right font-semibold text-slate-900">{value}</dd>
     </div>
   );
 }

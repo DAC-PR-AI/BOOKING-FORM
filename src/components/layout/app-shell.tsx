@@ -3,8 +3,7 @@ import type { RoleName } from '@prisma/client';
 import { logout } from '@/app/(auth)/login/actions';
 import type { SessionUser } from '@/lib/auth/session';
 import { unreadCount } from '@/lib/notify/dispatch';
-
-type NavItem = { href: string; label: string };
+import { NavLinks, type NavItem } from './nav-links';
 
 function navFor(role: RoleName): NavItem[] {
   switch (role) {
@@ -12,7 +11,7 @@ function navFor(role: RoleName): NavItem[] {
       return [
         { href: '/dashboard', label: 'Dashboard' },
         { href: '/forms', label: 'All Forms' },
-        { href: '/admin/users', label: 'Users' },
+        { href: '/admin/users', label: 'Role Master & Users' },
         { href: '/admin/projects', label: 'Projects' },
         { href: '/admin/audit', label: 'Audit' },
         { href: '/admin/system', label: 'System' },
@@ -35,6 +34,13 @@ function navFor(role: RoleName): NavItem[] {
   }
 }
 
+function initialsOf(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return 'DA';
+  if (parts.length === 1) return (parts[0] ?? 'DA').slice(0, 2).toUpperCase();
+  return `${parts[0]?.[0] ?? ''}${parts[parts.length - 1]?.[0] ?? ''}`.toUpperCase();
+}
+
 export async function AppShell({
   user,
   children,
@@ -44,59 +50,90 @@ export async function AppShell({
 }) {
   const nav = navFor(user.role.name);
   const unread = await unreadCount(user.id);
+  const initials = initialsOf(user.name);
 
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="border-b border-gray-200 bg-white">
-        {/* navy/orange accent, echoing the paper form */}
-        <div className="flex h-1" aria-hidden="true">
-          <div className="w-24 bg-dac-navy-700" />
-          <div className="w-10 bg-dac-orange-500" />
-        </div>
+      <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/95 backdrop-blur-md shadow-2xs">
+        {/* Full-width navy/orange architectural top stripe */}
+        <div
+          className="h-1 w-full bg-gradient-to-r from-dac-navy-900 via-dac-navy-600 to-dac-orange-500"
+          aria-hidden="true"
+        />
 
-        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
-          <Link href="/" className="text-sm font-semibold tracking-tight text-gray-900">
-            DAC Booking Portal
+        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-5 gap-y-2.5 px-4 py-3">
+          <Link
+            href="/"
+            className="flex items-center gap-3 text-sm font-bold tracking-tight text-slate-900 transition hover:opacity-90"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/brand/dac-logo.png"
+              alt="DAC Developers"
+              className="h-8 w-auto object-contain"
+            />
+            <span className="hidden h-5 w-px bg-slate-200 sm:inline-block" aria-hidden="true" />
+            <span className="flex flex-col leading-none">
+              <span className="text-sm font-bold text-dac-navy-900">DAC Booking Portal</span>
+              <span className="mt-0.5 text-[10px] font-medium tracking-wider text-slate-400 uppercase">
+                Allotment &amp; Approvals
+              </span>
+            </span>
           </Link>
 
-          <nav className="flex items-center gap-4" aria-label="Main">
-            {nav.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="text-sm text-gray-600 transition hover:text-dac-navy-700"
-              >
-                {item.label}
-              </Link>
-            ))}
-          </nav>
+          <NavLinks items={nav} />
 
-          <div className="ml-auto flex items-center gap-3">
+          <div className="ml-auto flex items-center gap-2.5 sm:gap-3">
             <Link
               href="/notifications"
-              className="relative rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 transition hover:bg-gray-50"
+              className="relative inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs transition hover:border-slate-300 hover:bg-white"
               aria-label={
                 unread === 0
                   ? 'Notifications'
                   : `Notifications, ${unread} unread`
               }
             >
-              Notifications
+              <svg
+                className="h-3.5 w-3.5 text-slate-500"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={2}
+                stroke="currentColor"
+                aria-hidden="true"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0"
+                />
+              </svg>
+              <span>Notifications</span>
               {unread > 0 ? (
-                <span className="ml-1.5 inline-flex min-w-4 items-center justify-center rounded-full bg-dac-orange-500 px-1 text-[10px] font-semibold text-white">
+                <span className="inline-flex min-w-4.5 items-center justify-center rounded-full bg-dac-orange-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white shadow-2xs">
                   {unread > 99 ? '99+' : unread}
                 </span>
               ) : null}
             </Link>
 
-            <span className="text-right text-xs leading-tight">
-              <span className="block font-medium text-gray-900">{user.name}</span>
-              <span className="block text-gray-500">{user.role.label}</span>
-            </span>
+            <div className="hidden sm:flex items-center gap-2.5 rounded-xl border border-slate-200/80 bg-slate-50/60 px-2.5 py-1">
+              <span
+                aria-hidden="true"
+                className="flex h-7 w-7 items-center justify-center rounded-lg bg-dac-navy-800 text-[11px] font-bold text-white shadow-2xs"
+              >
+                {initials}
+              </span>
+              <span className="text-left text-xs leading-tight">
+                <span className="block font-semibold text-slate-900">{user.name}</span>
+                <span className="block text-[11px] font-medium text-dac-navy-700">
+                  {user.role.label}
+                </span>
+              </span>
+            </div>
+
             <form action={logout}>
               <button
                 type="submit"
-                className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 transition hover:bg-gray-50"
+                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 shadow-2xs transition hover:border-red-200 hover:bg-red-50 hover:text-red-700"
               >
                 Sign out
               </button>
@@ -107,10 +144,24 @@ export async function AppShell({
 
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8">{children}</main>
 
-      <footer className="border-t border-gray-200 bg-white px-4 py-3">
-        <p className="mx-auto w-full max-w-6xl text-xs text-gray-500">
-          DAC Developers Pvt Ltd · all times shown in IST
-        </p>
+      <footer className="border-t border-slate-200/80 bg-white px-4 py-4">
+        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+          <div className="flex items-center gap-2.5">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/brand/dac-logo.png"
+              alt="DAC"
+              className="h-5 w-auto object-contain opacity-85"
+            />
+            <span className="font-medium text-slate-700">DAC Developers Pvt Ltd</span>
+            <span aria-hidden="true" className="text-slate-300">·</span>
+            <span>All times shown in IST</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
+            <span className="font-medium text-slate-600">Domain restricted: @dacdevelopers.com</span>
+          </div>
+        </div>
       </footer>
     </div>
   );

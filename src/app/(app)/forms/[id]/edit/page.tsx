@@ -140,6 +140,10 @@ export default async function EditBookingFormPage({
         primary: photoIdFor('photo_applicant_1'),
         secondary: photoIdFor('photo_applicant_2'),
       }}
+      existingLast4={{
+        primary: { pan: primary?.panLast4 ?? null, aadhaar: primary?.aadhaarLast4 ?? null },
+        secondary: { pan: secondary?.panLast4 ?? null, aadhaar: secondary?.aadhaarLast4 ?? null },
+      }}
     />
   );
 }

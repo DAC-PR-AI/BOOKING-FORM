@@ -390,7 +390,6 @@ async function main(): Promise<void> {
       'REMARKS (if any)',
       'Sale Price',
       '(Excluding GST & Registration charges)',
-      'Managing Director',
       '1ST Applicant',
       'AGM',
       'VP Sales',

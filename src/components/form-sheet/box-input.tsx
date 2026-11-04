@@ -10,13 +10,6 @@ import { useId, useRef, type ClipboardEvent, type KeyboardEvent } from 'react';
  *   Alternate Mobile No 10
  *   Adhaar No           12
  *   D.O.B                8, printed as 4 visual pairs (DD MM YY YY)
- *
- * Behaviour: auto-advance on entry, backspace steps back, arrow keys move,
- * and a pasted value fills from the current box. Mobile keyboards get the
- * numeric pad.
- *
- * Accessibility: the boxes are a labelled group with one combined value for
- * screen readers, rather than 12 unlabelled single-character fields.
  */
 
 export type BoxInputProps = {
@@ -132,38 +125,48 @@ export function BoxInput({
       role="group"
       aria-label={label}
       aria-describedby={describedById}
-      className="flex items-center gap-1"
+      className="flex items-center gap-0.5 sm:gap-1 max-w-full overflow-x-auto py-1"
     >
       {/* One combined value for assistive tech and for form submission. */}
       {name ? <input type="hidden" name={name} value={value.trim()} /> : null}
 
-      {digits.map((digit, index) => (
-        <span key={`${groupId}-${index}`} className="contents">
-          <input
-            ref={(el) => {
-              refs.current[index] = el;
-            }}
-            type="text"
-            inputMode="numeric"
-            autoComplete="off"
-            maxLength={1}
-            disabled={disabled}
-            value={digit.trim()}
-            aria-label={`${label}, digit ${index + 1} of ${length}`}
-            onChange={(e) => handleChange(index, e.target.value)}
-            onKeyDown={(e) => handleKeyDown(index, e)}
-            onPaste={(e) => handlePaste(index, e)}
-            onFocus={(e) => e.target.select()}
-            className={[
-              'h-9 w-7 border text-center text-sm font-medium tabular-nums',
-              'focus:outline-none focus:ring-2 focus:ring-dac-navy-500',
-              invalid ? 'border-red-500 bg-red-50' : 'border-gray-400 bg-white',
-              disabled ? 'cursor-not-allowed bg-gray-100 text-gray-500' : '',
-            ].join(' ')}
-          />
-          {gapAfter.has(index) ? <span className="w-2" aria-hidden="true" /> : null}
-        </span>
-      ))}
+      {digits.map((digit, index) => {
+        const trimmed = digit.trim();
+        const isFilled = trimmed.length > 0;
+        return (
+          <span key={`${groupId}-${index}`} className="contents">
+            <input
+              ref={(el) => {
+                refs.current[index] = el;
+              }}
+              type="text"
+              inputMode="numeric"
+              autoComplete="off"
+              maxLength={1}
+              disabled={disabled}
+              value={trimmed}
+              aria-label={`${label}, digit ${index + 1} of ${length}`}
+              onChange={(e) => handleChange(index, e.target.value)}
+              onKeyDown={(e) => handleKeyDown(index, e)}
+              onPaste={(e) => handlePaste(index, e)}
+              onFocus={(e) => e.target.select()}
+              className={[
+                'h-9 w-6 sm:w-7 shrink-0 rounded-md border text-center text-xs sm:text-sm font-bold tabular-nums shadow-2xs transition',
+                'focus:border-dac-navy-700 focus:bg-white focus:outline-none focus:ring-2 focus:ring-dac-navy-500/30',
+                invalid
+                  ? 'border-red-500 bg-red-50 text-red-900'
+                  : isFilled
+                    ? 'border-dac-navy-600/80 bg-dac-navy-50/40 text-dac-navy-900'
+                    : 'border-slate-300 bg-white text-slate-900 hover:border-slate-400',
+                disabled ? 'cursor-not-allowed bg-slate-100 text-slate-500' : '',
+              ].join(' ')}
+            />
+            {gapAfter.has(index) ? (
+              <span className="w-1.5 sm:w-2.5 shrink-0" aria-hidden="true" />
+            ) : null}
+          </span>
+        );
+      })}
     </div>
   );
 }

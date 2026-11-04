@@ -424,7 +424,7 @@ async function main(): Promise<void> {
       });
       if (!result.ok) fail('signStep', `step ${order} refused: ${result.error}`);
     }
-    ok('signs steps 7 and 8');
+    ok('signs steps 7 (MIS) and 8 (Director)');
 
     const last = await signStep(byStepRole[9] as SessionUser, {
       formId,
@@ -433,7 +433,7 @@ async function main(): Promise<void> {
     });
     if (!last.ok) fail('signStep', `step 9 refused: ${last.error}`);
     if (!last.completed) fail('signStep', 'signing the last step did not complete the booking.');
-    ok('signing step 9 completes the booking', last.bookingId ?? '');
+    ok('signing step 9 (CRM) completes the booking', last.bookingId ?? '');
 
     const done = await statusOf(formId);
     if (done.status !== 'COMPLETED') fail('signStep', `final status is ${done.status}`);

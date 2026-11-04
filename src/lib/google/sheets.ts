@@ -49,6 +49,21 @@ export function googleConfig(): GoogleConfig | null {
   };
 }
 
+export function googleUsersConfig(): GoogleConfig | null {
+  const clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+  const rawKey = process.env.GOOGLE_PRIVATE_KEY;
+  const sheetId = process.env.GOOGLE_USERS_SHEET_ID || process.env.GOOGLE_PROJECTS_SHEET_ID;
+
+  if (!clientEmail || !rawKey || !sheetId) return null;
+
+  return {
+    clientEmail,
+    privateKey: rawKey.replace(/\\n/g, '\n'),
+    sheetId,
+    tab: process.env.GOOGLE_USERS_SHEET_TAB || 'Users',
+  };
+}
+
 function base64Url(input: Buffer | string): string {
   return Buffer.from(input).toString('base64url');
 }
@@ -148,6 +163,38 @@ export async function readProjectRows(config: GoogleConfig): Promise<string[][]>
   const body = (await response.json()) as { values?: string[][] };
   // Sheets omits trailing empty cells, so rows arrive ragged. The parser
   // handles short rows; normalising to strings here keeps it simple.
+  return (body.values ?? []).map((row) => row.map((cell) => String(cell ?? '')));
+}
+
+export async function readUsersRows(config: GoogleConfig): Promise<string[][]> {
+  const token = await accessToken(config);
+  const range = encodeURIComponent(config.tab);
+  const url =
+    `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(config.sheetId)}` +
+    `/values/${range}?majorDimension=ROWS&valueRenderOption=FORMATTED_VALUE`;
+
+  const response = await fetch(url, {
+    headers: { authorization: `Bearer ${token}` },
+    cache: 'no-store',
+  });
+
+  if (response.status === 403) {
+    throw new Error(
+      'Google denied access to the sheet. Share it with the service account ' +
+        `(${config.clientEmail}) as a Viewer.`,
+    );
+  }
+  if (response.status === 404) {
+    throw new Error(
+      `No sheet with that id, or no tab called "${config.tab}". Check ` +
+        'GOOGLE_USERS_SHEET_ID and GOOGLE_USERS_SHEET_TAB.',
+    );
+  }
+  if (!response.ok) {
+    throw new Error(`Google Sheets returned ${response.status}: ${(await response.text()).slice(0, 300)}`);
+  }
+
+  const body = (await response.json()) as { values?: string[][] };
   return (body.values ?? []).map((row) => row.map((cell) => String(cell ?? '')));
 }
 

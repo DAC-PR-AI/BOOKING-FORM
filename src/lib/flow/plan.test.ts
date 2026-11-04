@@ -15,7 +15,7 @@ import {
 const CREATOR = 'creator-1';
 
 /** The nine seeded steps, reduced to what planning reads. */
-const STEPS: FlowStepConfig[] = [
+const NINE_STEPS: FlowStepConfig[] = [
   { id: 's1', orderIndex: 1, label: '1st Applicant', roleId: 'r-exec', action: 'SIGN', skipIfNoSecondApplicant: false, actsOnCreatorDevice: true, pdfSignatureSlot: 'applicant_1' },
   { id: 's2', orderIndex: 2, label: '2nd Applicant', roleId: 'r-exec', action: 'SIGN', skipIfNoSecondApplicant: true, actsOnCreatorDevice: true, pdfSignatureSlot: 'applicant_2' },
   { id: 's3', orderIndex: 3, label: 'AGM', roleId: 'r-agm', action: 'SIGN', skipIfNoSecondApplicant: false, actsOnCreatorDevice: false, pdfSignatureSlot: 'agm' },
@@ -32,18 +32,18 @@ const JOINT: FlowContext = { hasSecondApplicant: true, creatorId: CREATOR };
 
 function statuses(context: FlowContext): Record<number, string> {
   return Object.fromEntries(
-    planFlow(STEPS, context).map((entry) => [entry.step.orderIndex, entry.status]),
+    planFlow(NINE_STEPS, context).map((entry) => [entry.step.orderIndex, entry.status]),
   );
 }
 
 describe('isApplicable', () => {
   it('skips the second-applicant step for a sole applicant', () => {
-    expect(isApplicable(STEPS[1] as FlowStepConfig, SOLE)).toBe(false);
-    expect(isApplicable(STEPS[1] as FlowStepConfig, JOINT)).toBe(true);
+    expect(isApplicable(NINE_STEPS[1] as FlowStepConfig, SOLE)).toBe(false);
+    expect(isApplicable(NINE_STEPS[1] as FlowStepConfig, JOINT)).toBe(true);
   });
 
   it('leaves every other step applicable either way', () => {
-    for (const step of STEPS.filter((s) => !s.skipIfNoSecondApplicant)) {
+    for (const step of NINE_STEPS.filter((s) => !s.skipIfNoSecondApplicant)) {
       expect(isApplicable(step, SOLE)).toBe(true);
       expect(isApplicable(step, JOINT)).toBe(true);
     }
@@ -52,7 +52,7 @@ describe('isApplicable', () => {
 
 describe('planFlow', () => {
   it('opens exactly one step', () => {
-    const pending = planFlow(STEPS, JOINT).filter((e) => e.status === 'PENDING');
+    const pending = planFlow(NINE_STEPS, JOINT).filter((e) => e.status === 'PENDING');
     expect(pending).toHaveLength(1);
     expect(pending[0]?.step.orderIndex).toBe(1);
   });
@@ -74,53 +74,53 @@ describe('planFlow', () => {
   });
 
   it('assigns the in-person applicant steps to the creator', () => {
-    const plan = planFlow(STEPS, JOINT);
+    const plan = planFlow(NINE_STEPS, JOINT);
     expect(plan.find((e) => e.step.orderIndex === 1)?.assigneeId).toBe(CREATOR);
     expect(plan.find((e) => e.step.orderIndex === 2)?.assigneeId).toBe(CREATOR);
   });
 
   it('leaves staff steps unassigned, so any holder of the role can act', () => {
-    const plan = planFlow(STEPS, JOINT);
+    const plan = planFlow(NINE_STEPS, JOINT);
     for (const order of [3, 4, 5, 6, 7, 8, 9]) {
       expect(plan.find((e) => e.step.orderIndex === order)?.assigneeId).toBeNull();
     }
   });
 
   it('never assigns a skipped step to anyone', () => {
-    const skipped = planFlow(STEPS, SOLE).find((e) => e.status === 'SKIPPED');
+    const skipped = planFlow(NINE_STEPS, SOLE).find((e) => e.status === 'SKIPPED');
     expect(skipped?.assigneeId).toBeNull();
   });
 
   it('sorts out-of-order configuration rather than trusting the caller', () => {
-    const shuffled = [STEPS[4], STEPS[0], STEPS[8], STEPS[2]] as FlowStepConfig[];
+    const shuffled = [NINE_STEPS[4], NINE_STEPS[0], NINE_STEPS[8], NINE_STEPS[2]] as FlowStepConfig[];
     const plan = planFlow(shuffled, SOLE);
     expect(plan.map((e) => e.step.orderIndex)).toEqual([1, 3, 5, 9]);
     expect(plan[0]?.status).toBe('PENDING');
   });
 
   it('does not mutate the configuration it was given', () => {
-    const input = [...STEPS];
+    const input = [...NINE_STEPS];
     planFlow(input, SOLE);
-    expect(input.map((s) => s.orderIndex)).toEqual(STEPS.map((s) => s.orderIndex));
+    expect(input.map((s) => s.orderIndex)).toEqual(NINE_STEPS.map((s) => s.orderIndex));
   });
 });
 
 describe('firstApplicableOrder / nextApplicableOrder', () => {
   it('starts at step 1', () => {
-    expect(firstApplicableOrder(STEPS, SOLE)).toBe(1);
+    expect(firstApplicableOrder(NINE_STEPS, SOLE)).toBe(1);
   });
 
   it('steps over a skipped step instead of stopping at it', () => {
-    expect(nextApplicableOrder(STEPS, SOLE, 1)).toBe(3);
-    expect(nextApplicableOrder(STEPS, JOINT, 1)).toBe(2);
+    expect(nextApplicableOrder(NINE_STEPS, SOLE, 1)).toBe(3);
+    expect(nextApplicableOrder(NINE_STEPS, JOINT, 1)).toBe(2);
   });
 
   it('returns null after the last step, which is what completes a booking', () => {
-    expect(nextApplicableOrder(STEPS, SOLE, 9)).toBeNull();
+    expect(nextApplicableOrder(NINE_STEPS, SOLE, 9)).toBeNull();
   });
 
   it('returns null when no step applies at all', () => {
-    expect(firstApplicableOrder([STEPS[1] as FlowStepConfig], SOLE)).toBeNull();
+    expect(firstApplicableOrder([NINE_STEPS[1] as FlowStepConfig], SOLE)).toBeNull();
   });
 });
 
@@ -153,13 +153,13 @@ function returnedFromSix(): ExistingRecord[] {
 
 describe('planResume', () => {
   it('resumes at the step that returned it, not at step 1', () => {
-    const plan = planResume(STEPS, SOLE, returnedFromSix(), 6);
+    const plan = planResume(NINE_STEPS, SOLE, returnedFromSix(), 6);
     expect(plan.resumeAtOrder).toBe(6);
     expect(plan.rewoundForNewApplicant).toBe(false);
   });
 
   it('opens that step and locks the ones after it', () => {
-    const plan = planResume(STEPS, SOLE, returnedFromSix(), 6);
+    const plan = planResume(NINE_STEPS, SOLE, returnedFromSix(), 6);
     const byOrder = Object.fromEntries(plan.statuses.map((s) => [s.orderIndex, s.status]));
     expect(byOrder[6]).toBe('PENDING');
     expect(byOrder[7]).toBe('LOCKED');
@@ -167,14 +167,12 @@ describe('planResume', () => {
   });
 
   it('falls back to the first step when nothing recorded where to resume', () => {
-    const plan = planResume(STEPS, SOLE, returnedFromSix(), null);
+    const plan = planResume(NINE_STEPS, SOLE, returnedFromSix(), null);
     expect(plan.resumeAtOrder).toBe(1);
   });
 
   it('rewinds to the second-applicant step when one was added while returned', () => {
-    // Returned from step 6, and the creator has now added a second applicant.
-    // Resuming at 6 would send an unsigned second applicant onward.
-    const plan = planResume(STEPS, JOINT, returnedFromSix(), 6);
+    const plan = planResume(NINE_STEPS, JOINT, returnedFromSix(), 6);
     expect(plan.resumeAtOrder).toBe(2);
     expect(plan.rewoundForNewApplicant).toBe(true);
 
@@ -189,19 +187,18 @@ describe('planResume', () => {
       { orderIndex: 2, status: 'SKIPPED' },
       ...[3, 4, 5, 6, 7, 8, 9].map((orderIndex) => ({ orderIndex, status: 'LOCKED' as const })),
     ];
-    const plan = planResume(STEPS, JOINT, existing, 1);
+    const plan = planResume(NINE_STEPS, JOINT, existing, 1);
     expect(plan.resumeAtOrder).toBe(1);
     expect(plan.rewoundForNewApplicant).toBe(false);
   });
 
   it('moves on when the step it was returned to no longer applies', () => {
-    // Returned to step 2, then the second applicant was removed.
     const existing: ExistingRecord[] = [
       { orderIndex: 1, status: 'SIGNED' },
       { orderIndex: 2, status: 'RETURNED' },
       ...[3, 4, 5, 6, 7, 8, 9].map((orderIndex) => ({ orderIndex, status: 'LOCKED' as const })),
     ];
-    const plan = planResume(STEPS, SOLE, existing, 2);
+    const plan = planResume(NINE_STEPS, SOLE, existing, 2);
     expect(plan.resumeAtOrder).toBe(3);
   });
 
@@ -211,7 +208,7 @@ describe('planResume', () => {
       { orderIndex: 2, status: 'SIGNED' },
       ...[3, 4, 5, 6, 7, 8, 9].map((orderIndex) => ({ orderIndex, status: 'LOCKED' as const })),
     ];
-    const plan = planResume(STEPS, SOLE, existing, 3);
+    const plan = planResume(NINE_STEPS, SOLE, existing, 3);
     const byOrder = Object.fromEntries(plan.statuses.map((s) => [s.orderIndex, s.status]));
     expect(byOrder[2]).toBe('SKIPPED');
   });
@@ -220,7 +217,7 @@ describe('planResume', () => {
 describe('resumeWrites', () => {
   it('leaves completed steps behind the resume point untouched', () => {
     const existing = returnedFromSix();
-    const plan = planResume(STEPS, SOLE, existing, 6);
+    const plan = planResume(NINE_STEPS, SOLE, existing, 6);
     const writes = resumeWrites(plan, existing);
     const touched = writes.map((w) => w.orderIndex);
 
@@ -232,32 +229,27 @@ describe('resumeWrites', () => {
 
   it('writes only the steps whose status actually changes', () => {
     const existing = returnedFromSix();
-    const plan = planResume(STEPS, SOLE, existing, 6);
+    const plan = planResume(NINE_STEPS, SOLE, existing, 6);
     const writes = resumeWrites(plan, existing);
 
-    // 6 goes RETURNED -> PENDING. 7, 8, 9 are already LOCKED, 2 already SKIPPED.
     expect(writes.map((w) => w.orderIndex)).toEqual([6]);
     expect(writes[0]?.status).toBe('PENDING');
   });
 
   it('never erases a signature when a rewind reopens an earlier step', () => {
     const existing = returnedFromSix();
-    const plan = planResume(STEPS, JOINT, existing, 6);
+    const plan = planResume(NINE_STEPS, JOINT, existing, 6);
     const writes = resumeWrites(plan, existing);
     const byOrder = Object.fromEntries(writes.map((w) => [w.orderIndex, w.status]));
 
-    // Step 1 is signed and behind the new resume point of 2 — left alone.
     expect(byOrder[1]).toBeUndefined();
     expect(byOrder[2]).toBe('PENDING');
-    // Steps 3-5 were signed and are now ahead of the resume point, so they do
-    // get rewritten to LOCKED: they have to be re-approved after a change the
-    // second applicant has not seen.
     expect(byOrder[3]).toBe('LOCKED');
     expect(byOrder[5]).toBe('LOCKED');
   });
 
   it('writes every step for a flow whose records do not exist yet', () => {
-    const plan = planResume(STEPS, SOLE, [], 1);
-    expect(resumeWrites(plan, [])).toHaveLength(STEPS.length);
+    const plan = planResume(NINE_STEPS, SOLE, [], 1);
+    expect(resumeWrites(plan, [])).toHaveLength(NINE_STEPS.length);
   });
 });

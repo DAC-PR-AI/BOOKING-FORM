@@ -24,13 +24,12 @@ import { authoriseFormAccess } from '@/lib/documents/access';
  *   3. `confirmDocumentUpload` — the server checks the object really landed,
  *      at a plausible size, and records the row.
  *
- * The row is created in step 3, not step 1, so a failed or abandoned upload
- * leaves no document that appears attached but cannot be opened. The reverse
- * order would be worse than useless: a checklist that claims a PAN card is on
- * file when it is not.
- *
- * Nothing here trusts the browser about the key, the content type or the size
- * ceiling — all three are inside the signed grant.
+ * Business Rule:
+ *   - Photo, PAN card, and Aadhaar card are mandatory when creating/submitting
+ *     the form. Once submitted, existing mandatory KYC documents are locked
+ *     unless the form is returned for changes.
+ *   - All other supporting documents (1st payment screenshot, Simple cost sheet,
+ *     Mail, Discount cost sheet) can be uploaded or updated at ANY time.
  */
 
 export type UploadTicket = {
@@ -57,6 +56,14 @@ function secret(): string {
   return value;
 }
 
+function isMandatoryType(requirement: {
+  isMandatory: boolean;
+  requiredIfSecondApplicant: boolean;
+} | null): boolean {
+  if (!requirement) return false;
+  return requirement.isMandatory || requirement.requiredIfSecondApplicant;
+}
+
 export async function requestDocumentUpload(input: {
   bookingFormId: string;
   documentTypeId: string;
@@ -67,10 +74,10 @@ export async function requestDocumentUpload(input: {
 
   const access = await authoriseFormAccess(user, input.bookingFormId);
   if (!access) return { ok: false, error: 'Form not found.' };
-  if (!access.editable) {
+  if (!access.canUploadAnytime) {
     return {
       ok: false,
-      error: 'This form has been submitted, so its documents can no longer be changed.',
+      error: 'This booking has been cancelled, so documents can no longer be changed.',
     };
   }
 
@@ -80,8 +87,28 @@ export async function requestDocumentUpload(input: {
       organizationId: user.organizationId,
       isActive: true,
     },
+    include: { requirement: true },
   });
   if (!documentType) return { ok: false, error: 'Unknown document type.' };
+
+  // Mandatory KYC documents (Photo, PAN, Aadhaar) that are already attached
+  // cannot be replaced after submission unless the form is in DRAFT or RETURNED.
+  // Non-mandatory documents can be uploaded or updated at any time.
+  if (isMandatoryType(documentType.requirement) && !access.editable) {
+    const existingCount = await prisma.formDocument.count({
+      where: {
+        bookingFormId: access.bookingFormId,
+        documentTypeId: documentType.id,
+      },
+    });
+    if (existingCount > 0) {
+      return {
+        ok: false,
+        error:
+          'Mandatory identity documents (Photo, PAN, Aadhaar) are locked once submitted unless the form is returned for changes. Other supporting documents can still be uploaded anytime.',
+      };
+    }
+  }
 
   const contentType = input.contentType.toLowerCase();
   if (!documentType.acceptedMimeTypes.includes(contentType)) {
@@ -183,13 +210,35 @@ export async function confirmDocumentUpload(input: {
     return { ok: false, error: 'That upload could not be verified. Please try again.' };
   }
 
-  // Re-check access: the form may have been submitted while the file uploaded.
   const access = await authoriseFormAccess(user, grant.bookingFormId);
   if (!access) return { ok: false, error: 'Form not found.' };
-  if (!access.editable) {
+  if (!access.canUploadAnytime) {
     return {
       ok: false,
-      error: 'This form was submitted while the file was uploading, so it was not attached.',
+      error: 'This booking has been cancelled, so the file was not attached.',
+    };
+  }
+
+  const documentType = await prisma.documentType.findUnique({
+    where: { id: grant.documentTypeId },
+    include: { requirement: true },
+  });
+
+  const previous = await prisma.formDocument.findMany({
+    where: { bookingFormId: grant.bookingFormId, documentTypeId: grant.documentTypeId },
+    select: { id: true, storageKey: true },
+  });
+
+  if (
+    documentType &&
+    isMandatoryType(documentType.requirement) &&
+    !access.editable &&
+    previous.length > 0
+  ) {
+    return {
+      ok: false,
+      error:
+        'Mandatory identity documents (Photo, PAN, Aadhaar) are locked once submitted unless the form is returned for changes.',
     };
   }
 
@@ -206,12 +255,6 @@ export async function confirmDocumentUpload(input: {
     await driver.remove(grant.storageKey).catch(() => undefined);
     return { ok: false, error: 'The uploaded file was not the expected size.' };
   }
-
-  // Replacing a document: supersede the previous row, then delete its object.
-  const previous = await prisma.formDocument.findMany({
-    where: { bookingFormId: grant.bookingFormId, documentTypeId: grant.documentTypeId },
-    select: { id: true, storageKey: true },
-  });
 
   const name = input.originalName.trim().slice(0, 255) || 'document';
 
@@ -259,6 +302,7 @@ export async function confirmDocumentUpload(input: {
   });
 
   revalidatePath(`/forms/${grant.bookingFormId}/documents`);
+  revalidatePath(`/forms/${grant.bookingFormId}`);
   revalidatePath('/forms');
 
   return { ok: true, documentId: created.id };
@@ -274,15 +318,23 @@ export async function removeDocument(documentId: string): Promise<RemoveResult> 
       storageKey: true,
       originalName: true,
       bookingFormId: true,
-      documentType: { select: { label: true } },
+      documentType: { select: { label: true, requirement: true } },
     },
   });
   if (!document) return { ok: false, error: 'Document not found.' };
 
   const access = await authoriseFormAccess(user, document.bookingFormId);
   if (!access) return { ok: false, error: 'Document not found.' };
-  if (!access.editable) {
-    return { ok: false, error: 'This form has been submitted, so its documents are locked.' };
+  if (!access.canUploadAnytime) {
+    return { ok: false, error: 'This booking has been cancelled, so its documents are locked.' };
+  }
+
+  if (isMandatoryType(document.documentType.requirement) && !access.editable) {
+    return {
+      ok: false,
+      error:
+        'Mandatory identity documents (Photo, PAN, Aadhaar) cannot be removed once the booking is submitted.',
+    };
   }
 
   await prisma.formDocument.delete({ where: { id: document.id } });
@@ -305,6 +357,7 @@ export async function removeDocument(documentId: string): Promise<RemoveResult> 
   });
 
   revalidatePath(`/forms/${document.bookingFormId}/documents`);
+  revalidatePath(`/forms/${document.bookingFormId}`);
   revalidatePath('/forms');
 
   return { ok: true };

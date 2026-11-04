@@ -19,11 +19,17 @@ const base64Key32 = z
 
 const schema = z.object({
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
+  DIRECT_URL: z.string().optional(),
   FIELD_ENCRYPTION_KEY: base64Key32,
   SESSION_SECRET: base64Key32,
   APP_URL: z.string().min(1).default('http://localhost:3000'),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   CRON_SECRET: z.string().optional(),
+
+  // --- Google Workspace OAuth (@dacdevelopers.com) -------------------------
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
+  ALLOWED_AUTH_DOMAIN: z.string().min(1).default('dacdevelopers.com'),
 
   // --- Document storage (Phase 3) ------------------------------------------
   // Left optional on purpose: with nothing set the app uses the local

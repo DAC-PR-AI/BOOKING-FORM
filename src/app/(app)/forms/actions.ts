@@ -151,6 +151,36 @@ export async function saveDraft(formId: string, payload: DraftInput): Promise<Sa
       const pan = a.pan?.trim().toUpperCase();
       const aadhaarDigits = a.aadhaar?.replace(/\s/g, '');
 
+      // Preserve existing encrypted values if the draft does not re-enter them
+      const existing = await tx.applicant.findUnique({
+        where: { bookingFormId_applicantType: { bookingFormId: form.id, applicantType: type } },
+        select: { panEncrypted: true, panLast4: true, aadhaarEncrypted: true, aadhaarLast4: true },
+      });
+
+      let panEncrypted = existing?.panEncrypted ?? null;
+      let panLast4 = existing?.panLast4 ?? null;
+      if (pan && pan.length > 0) {
+        if (isValidPan(pan)) {
+          panEncrypted = toDbBytes(encryptField(pan));
+          panLast4 = last4(pan);
+        } else {
+          panEncrypted = null;
+          panLast4 = null;
+        }
+      }
+
+      let aadhaarEncrypted = existing?.aadhaarEncrypted ?? null;
+      let aadhaarLast4 = existing?.aadhaarLast4 ?? null;
+      if (aadhaarDigits && aadhaarDigits.length > 0) {
+        if (isValidAadhaar(aadhaarDigits)) {
+          aadhaarEncrypted = toDbBytes(encryptField(aadhaarDigits));
+          aadhaarLast4 = last4(aadhaarDigits);
+        } else {
+          aadhaarEncrypted = null;
+          aadhaarLast4 = null;
+        }
+      }
+
       const data = {
         salutation: enumOrNull(a.salutation, ['MR', 'MRS', 'MS'] as const),
         fullName: a.fullName ? a.fullName.toUpperCase() : null,
@@ -160,16 +190,10 @@ export async function saveDraft(formId: string, payload: DraftInput): Promise<Sa
         mobileNo: a.mobileNo || null,
         altMobileNo: a.altMobileNo || null,
         email: a.email ? a.email.toLowerCase() : null,
-        // Only encrypt once the value is actually well formed; a partial PAN
-        // is not worth a ciphertext and would break the last-4.
-        panEncrypted: pan && isValidPan(pan) ? toDbBytes(encryptField(pan)) : null,
-        panLast4: pan && isValidPan(pan) ? last4(pan) : null,
-        aadhaarEncrypted:
-          aadhaarDigits && isValidAadhaar(aadhaarDigits)
-            ? toDbBytes(encryptField(aadhaarDigits))
-            : null,
-        aadhaarLast4:
-          aadhaarDigits && isValidAadhaar(aadhaarDigits) ? last4(aadhaarDigits) : null,
+        panEncrypted,
+        panLast4,
+        aadhaarEncrypted,
+        aadhaarLast4,
         dob: date(a.dob),
         occupation: a.occupation || null,
         companyName: a.companyName || null,

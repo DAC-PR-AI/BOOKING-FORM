@@ -125,13 +125,9 @@ export const PHOTO_BOX = { width: 78, height: 104 } as const;
 /**
  * The signature grid across the foot of page 1.
  *
- * The paper prints **eight** cells in two rows of four, plus a separate
- * "Managing Director" rule above them. The configured pipeline has nine steps:
- * the **Sales Co-ordinator** is not on the printed form at all (OPEN_QUESTIONS
- * Q5), so its cell is appended rather than pretending the paper has room for
- * it. The printed order below is read off the photograph, left to right, and is
- * deliberately NOT the pipeline order — the paper groups by seniority, the flow
- * runs by sequence.
+ * The paper form has eight labels in two rows of four cells (including Director);
+ * the confirmed pipeline adds the Sales Co-ordinator (step 6). Managing Director
+ * under Sale Price is removed.
  */
 export type SignatureCell = {
   /** Matches `flow_steps.pdf_signature_slot`. */
@@ -139,7 +135,6 @@ export type SignatureCell = {
   label: string;
   row: number;
   column: number;
-  /** False for the Sales Co-ordinator, which the paper does not print. */
   onPaper: boolean;
 };
 
@@ -152,7 +147,6 @@ export const SIGNATURE_GRID: SignatureCell[] = [
   { slot: 'dgm_gm', label: 'DGM / GM', row: 1, column: 1, onPaper: true },
   { slot: 'mis', label: 'MIS', row: 1, column: 2, onPaper: true },
   { slot: 'director', label: 'Director', row: 1, column: 3, onPaper: true },
-  // Appended: in the flow, not on the paper.
   { slot: 'sales_coordinator', label: 'Sales Co-ordinator', row: 2, column: 0, onPaper: false },
 ];
 
@@ -171,8 +165,6 @@ export function signatureCellWidth(): number {
 export const TERMS_SIGNATURES = [
   { slot: 'applicant_1', label: 'APPLICANT (1)' },
   { slot: 'applicant_2', label: 'APPLICANT (2)' },
-  // Deliberately NOT in the flow (OPEN_QUESTIONS Q7) — a blank rule for a wet
-  // signature after download, like the Managing Director line on page 1.
   { slot: null, label: 'AUTHORIZED SIGNATORY' },
 ] as const;
 

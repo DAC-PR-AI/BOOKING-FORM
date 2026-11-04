@@ -10,8 +10,8 @@ import { hash } from '@node-rs/argon2';
 /**
  * Idempotent seed. Safe to re-run: everything upserts on a natural key.
  *
- * Creates the demo accounts, the document checklist, the 9-step signature
- * pipeline and T&C v1. See OPEN_QUESTIONS.md Q9 for the account naming.
+ * Creates the demo accounts, the document checklist, the 8-step signature
+ * pipeline (MD/Director step removed) and T&C v1.
  */
 
 const connectionString = process.env.DATABASE_URL;
@@ -57,7 +57,7 @@ const USERS: Array<{ email: string; name: string; role: RoleName }> = [
   { email: 'crm@dac.test', name: 'Charu CRM', role: 'CRM' },
 ];
 
-/** The confirmed pipeline — brief §5.1. Order and roles live in the DB. */
+/** The confirmed 9-step pipeline (with Director at step 8 and CRM at step 9; Managing Director line on form is removed). */
 const FLOW_STEPS: Array<{
   orderIndex: number;
   label: string;
@@ -81,7 +81,12 @@ const FLOW_STEPS: Array<{
 const IMAGE = ['image/jpeg', 'image/png'];
 const SCAN = ['application/pdf', 'image/jpeg', 'image/png'];
 
-/** Confirmed document checklist — brief §3. */
+/**
+ * Confirmed document checklist:
+ * Only Photo, PAN card, and Aadhaar card are mandatory when creating/submitting
+ * the booking form (plus the 2nd applicant's Photo, PAN, and Aadhaar if there
+ * is a 2nd applicant). All remaining documents can be uploaded at any time.
+ */
 const DOCUMENT_TYPES: Array<{
   key: string;
   label: string;
@@ -93,33 +98,18 @@ const DOCUMENT_TYPES: Array<{
   requiredIfSecond?: boolean;
   sortOrder: number;
 }> = [
-  { key: 'photo_applicant_1', label: 'Passport-size photo', helpText: 'Photo of the sole / first applicant. Also printed in the photo box on the form.', scope: 'APPLICANT', appliesTo: 'PRIMARY', mimes: IMAGE, mandatory: true, sortOrder: 10 },
-  { key: 'photo_applicant_2', label: 'Passport-size photo', helpText: 'Photo of the co / second applicant.', scope: 'APPLICANT', appliesTo: 'SECONDARY', mimes: IMAGE, requiredIfSecond: true, sortOrder: 20 },
-  { key: 'pan_applicant_1', label: 'PAN card', helpText: 'PAN card of the first applicant.', scope: 'APPLICANT', appliesTo: 'PRIMARY', mimes: SCAN, mandatory: true, sortOrder: 30 },
-  { key: 'pan_applicant_2', label: 'PAN card', helpText: 'PAN card of the second applicant.', scope: 'APPLICANT', appliesTo: 'SECONDARY', mimes: SCAN, requiredIfSecond: true, sortOrder: 40 },
-  { key: 'aadhaar_applicant_1', label: 'Adhaar card', helpText: 'Adhaar card of the first applicant.', scope: 'APPLICANT', appliesTo: 'PRIMARY', mimes: SCAN, mandatory: true, sortOrder: 50 },
-  { key: 'aadhaar_applicant_2', label: 'Adhaar card', helpText: 'Adhaar card of the second applicant.', scope: 'APPLICANT', appliesTo: 'SECONDARY', mimes: SCAN, requiredIfSecond: true, sortOrder: 60 },
-  { key: 'first_payment_screenshot', label: '1st payment screenshot', helpText: 'Screenshot or receipt of the first payment.', scope: 'FORM', mimes: SCAN, mandatory: true, sortOrder: 70 },
-  { key: 'simple_cost_sheet', label: 'Simple cost sheet', helpText: 'The agreed cost sheet.', scope: 'FORM', mimes: SCAN, mandatory: true, sortOrder: 80 },
-  // OPEN_QUESTIONS Q2: confirmed mandatory, and the content is a photo the
-  // executive uploads. Label and help text are editable from the admin screen.
-  { key: 'mail', label: 'Mail', helpText: 'Photo or screenshot of the mail.', scope: 'FORM', mimes: SCAN, mandatory: true, sortOrder: 90 },
-  { key: 'discount_cost_sheet', label: 'Discount cost sheet', helpText: 'Only if a discount was approved.', scope: 'FORM', mimes: SCAN, sortOrder: 100 },
+  { key: 'photo_applicant_1', label: 'Passport-size photo', helpText: 'Photo of the sole / first applicant. Mandatory while creating the form.', scope: 'APPLICANT', appliesTo: 'PRIMARY', mimes: IMAGE, mandatory: true, sortOrder: 10 },
+  { key: 'photo_applicant_2', label: 'Passport-size photo', helpText: 'Photo of the co / second applicant. Mandatory if there is a second applicant.', scope: 'APPLICANT', appliesTo: 'SECONDARY', mimes: IMAGE, requiredIfSecond: true, sortOrder: 20 },
+  { key: 'pan_applicant_1', label: 'PAN card', helpText: 'PAN card of the first applicant. Mandatory while creating the form.', scope: 'APPLICANT', appliesTo: 'PRIMARY', mimes: SCAN, mandatory: true, sortOrder: 30 },
+  { key: 'pan_applicant_2', label: 'PAN card', helpText: 'PAN card of the second applicant. Mandatory if there is a second applicant.', scope: 'APPLICANT', appliesTo: 'SECONDARY', mimes: SCAN, requiredIfSecond: true, sortOrder: 40 },
+  { key: 'aadhaar_applicant_1', label: 'Adhaar card', helpText: 'Adhaar card of the first applicant. Mandatory while creating the form.', scope: 'APPLICANT', appliesTo: 'PRIMARY', mimes: SCAN, mandatory: true, sortOrder: 50 },
+  { key: 'aadhaar_applicant_2', label: 'Adhaar card', helpText: 'Adhaar card of the second applicant. Mandatory if there is a second applicant.', scope: 'APPLICANT', appliesTo: 'SECONDARY', mimes: SCAN, requiredIfSecond: true, sortOrder: 60 },
+  { key: 'first_payment_screenshot', label: '1st payment screenshot', helpText: 'Screenshot or receipt of the first payment. Can be uploaded anytime.', scope: 'FORM', mimes: SCAN, sortOrder: 70 },
+  { key: 'simple_cost_sheet', label: 'Simple cost sheet', helpText: 'The agreed cost sheet. Can be uploaded anytime.', scope: 'FORM', mimes: SCAN, sortOrder: 80 },
+  { key: 'mail', label: 'Mail', helpText: 'Photo or screenshot of the approval mail. Can be uploaded anytime.', scope: 'FORM', mimes: SCAN, sortOrder: 90 },
+  { key: 'discount_cost_sheet', label: 'Discount cost sheet', helpText: 'Only if a discount was approved. Can be uploaded anytime.', scope: 'FORM', mimes: SCAN, sortOrder: 100 },
 ];
 
-/**
- * Pulls the customer-facing T&C text out of content/terms/v1.md.
- *
- * Three parts of that file are editorial, not legal, and must not reach the
- * database: the YAML frontmatter, the "DO NOT SHIP UNTIL REVIEWED" blockquote
- * above the title, and the review checklist below the text. The body therefore
- * starts at the document's own `#` title line.
- *
- * This matters beyond tidiness. `body` is what an applicant reads and what
- * gets printed on page 2, and `body_sha256` is the proof of which text they
- * agreed to — so an internal note folded into it would both be shown to a
- * customer and corrupt the evidence.
- */
 function readTncBody(): string {
   const raw = readFileSync(resolve(repoRoot, 'content/terms/v1.md'), 'utf8');
   const withoutFrontmatter = raw.replace(/^---[\s\S]*?\n---\n/, '');
@@ -135,12 +125,6 @@ function readTncBody(): string {
   }
 
   const fromTitle = text.slice(titleIndex);
-
-  // The transcription marks the end of the clauses with a horizontal rule.
-  // Everything after it — the acceptance sentence and the note about where the
-  // signature slots come from — is page furniture that the renderer draws
-  // itself from `form-layout.ts`. Left in, it printed the acceptance line
-  // twice and put an HTML comment on the face of a legal document.
   const ruleIndex = fromTitle.search(/^\s*---\s*$/m);
   const clauses = ruleIndex === -1 ? fromTitle : fromTitle.slice(0, ruleIndex);
 
@@ -217,7 +201,7 @@ async function main(): Promise<void> {
   }
   console.log(`  source options: ${sources.length}`);
 
-  // --- Projects (placeholders until the Google Sheet sync lands, PLAN §2A) --
+  // --- Projects -----------------------------------------------------------
   const placeholders = [
     { name: 'Demo Project A', externalCode: 'DEMO-A' },
     { name: 'Demo Project B', externalCode: 'DEMO-B' },
@@ -282,6 +266,24 @@ async function main(): Promise<void> {
     data: { name: 'Booking Form — standard' },
   });
 
+  // Remove any legacy steps beyond the 8-step pipeline (e.g. step 9 when Director was step 8).
+  const legacySteps = await prisma.flowStep.findMany({
+    where: {
+      flowTemplateId: flowTemplate.id,
+      orderIndex: { gt: FLOW_STEPS.length },
+    },
+    select: { id: true },
+  });
+  if (legacySteps.length > 0) {
+    const legacyIds = legacySteps.map((s) => s.id);
+    await prisma.formStepRecord.deleteMany({
+      where: { flowStepId: { in: legacyIds } },
+    });
+    await prisma.flowStep.deleteMany({
+      where: { id: { in: legacyIds } },
+    });
+  }
+
   for (const step of FLOW_STEPS) {
     const roleId = roleByName.get(step.role);
     if (!roleId) throw new Error(`Missing role ${step.role}`);
@@ -341,8 +343,6 @@ async function main(): Promise<void> {
       title: 'TERMS & CONDITIONS FOR PROVISIONAL ALLOTMENT',
       body,
       bodySha256,
-      // Transcribed from the photograph and NOT yet signed off by DAC.
-      // See content/terms/v1.md § REVIEW CHECKLIST.
       isApproved: false,
       effectiveFrom: null,
     },

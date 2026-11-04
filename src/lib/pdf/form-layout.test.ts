@@ -86,18 +86,17 @@ describe('boxGroups', () => {
 });
 
 describe('the signature grid', () => {
-  it('prints eight cells, as the paper does', () => {
+  it('prints the eight cells that are on the paper form', () => {
     expect(SIGNATURE_GRID.filter((c) => c.onPaper)).toHaveLength(8);
   });
 
-  it('covers all nine pipeline steps', () => {
+  it('still covers all nine pipeline steps, so no signature is dropped', () => {
     expect(SIGNATURE_GRID).toHaveLength(9);
   });
 
-  it('appends the Sales Co-ordinator, which the paper does not print', () => {
-    const coordinator = SIGNATURE_GRID.find((c) => c.slot === 'sales_coordinator');
-    expect(coordinator?.onPaper).toBe(false);
-    expect(coordinator?.row).toBe(2);
+  it('appends only the Sales Co-ordinator beyond the paper grid', () => {
+    const added = SIGNATURE_GRID.filter((c) => !c.onPaper);
+    expect(added.map((c) => c.slot)).toEqual(['sales_coordinator']);
   });
 
   it('matches the slots the seed configures', () => {
@@ -108,8 +107,8 @@ describe('the signature grid', () => {
         'applicant_1',
         'applicant_2',
         'crm',
-        'director',
         'dgm_gm',
+        'director',
         'mis',
         'sales_coordinator',
         'vp_sales',
@@ -122,7 +121,7 @@ describe('the signature grid', () => {
     expect(new Set(slots).size).toBe(slots.length);
   });
 
-  it('places the printed cells in the order read off the photograph', () => {
+  it('places the printed cells in the order they appear on the paper', () => {
     const printed = SIGNATURE_GRID.filter((c) => c.onPaper)
       .slice()
       .sort((a, b) => a.row - b.row || a.column - b.column)
@@ -168,7 +167,6 @@ describe('the page-2 signatures', () => {
   });
 
   it('leaves the Authorized Signatory unmapped, for a wet signature', () => {
-    // OPEN_QUESTIONS Q7: deliberately not in the digital flow.
     expect(TERMS_SIGNATURES[2]?.slot).toBeNull();
     expect(TERMS_SIGNATURES[2]?.label).toBe('AUTHORIZED SIGNATORY');
   });

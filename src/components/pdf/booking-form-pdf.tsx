@@ -42,12 +42,6 @@ import type { PdfApplicant, PdfData, PdfSignature } from '@/lib/pdf/data';
  * the browser**: no CSS Grid, limited flexbox, no percentage heights. PLAN.md
  * §4 took that trade knowingly, and every proportion here comes from
  * `@/lib/pdf/form-layout` so the screen replica and this cannot drift apart.
- *
- * The brief is explicit that the digital form must look and read like the
- * paper, so the order, wording and furniture below are reproduced rather than
- * improved: the grey section ribbons, the character boxes, the tick squares,
- * the note printed sideways up the left margin, and the signature grid whose
- * printed order is by seniority rather than by the order people actually sign.
  */
 
 const styles = StyleSheet.create({
@@ -262,13 +256,6 @@ function Field({
   );
 }
 
-/**
- * The printed character squares, one glyph each.
- *
- * Takes the glyphs already spread by `charactersFor`/`dobCharacters` rather
- * than the raw value, so there is one place that decides how a value maps onto
- * boxes and this only draws them.
- */
 function CharBoxRun({
   glyphs,
   groups,
@@ -278,9 +265,6 @@ function CharBoxRun({
 }) {
   const sizes = boxGroups(glyphs.length, groups);
 
-  // Offsets computed up front rather than accumulated while mapping: a render
-  // function that mutates as it goes is not safe to re-run, and React will say
-  // so.
   const slices = sizes.map((size, groupIndex) => {
     const start = sizes.slice(0, groupIndex).reduce((sum, n) => sum + n, 0);
     return glyphs.slice(start, start + size);
@@ -571,7 +555,7 @@ export function BookingFormPdf({ data }: { data: PdfData }) {
         </View>
 
         {/* --- remarks and sale price --- */}
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
           <View style={{ width: '62%' }}>
             <Ribbon>REMARKS (if any)</Ribbon>
             <View style={[styles.box, { paddingTop: 9, minHeight: 52 }]}>
@@ -579,23 +563,12 @@ export function BookingFormPdf({ data }: { data: PdfData }) {
             </View>
           </View>
 
-          <View style={{ width: '36%' }}>
-            <View style={[styles.box, { paddingVertical: 6 }]}>
+          <View style={{ width: '36%', justifyContent: 'center' }}>
+            <View style={[styles.box, { paddingVertical: 8 }]}>
               <Field label="Sale Price" value={data.salePrice} labelWidth={48} />
               <Text style={{ fontSize: 4.6, textAlign: 'right', color: COLOURS.rule }}>
                 {SALE_PRICE_NOTE}
               </Text>
-            </View>
-            <View style={{ marginTop: 14, alignItems: 'center' }}>
-              <View
-                style={{
-                  borderBottomWidth: RULE.fill,
-                  borderBottomColor: COLOURS.rule,
-                  width: '86%',
-                  height: 16,
-                }}
-              />
-              <Text style={[styles.label, { marginTop: 1 }]}>Managing Director</Text>
             </View>
           </View>
         </View>
@@ -609,15 +582,20 @@ export function BookingFormPdf({ data }: { data: PdfData }) {
                 .sort((a, b) => a.column - b.column)
                 .map((cell) => (
                   <View key={cell.slot} style={styles.signatureCell}>
-                    <Text style={styles.signatureLabel}>{cell.label}:</Text>
+                    <Text
+                      style={[
+                        styles.signatureLabel,
+                        cell.label.length > 10 ? { width: 74 } : {},
+                      ]}
+                    >
+                      {cell.label}:
+                    </Text>
                     <SignatureWell signature={data.signatures[cell.slot]} />
                   </View>
                 ))}
             </View>
           ))}
 
-          {/* Not on the paper (OPEN_QUESTIONS Q5) — appended so the ninth
-              signature in the pipeline is still visible on the printed form. */}
           {appended.map((cell) => (
             <View key={cell.slot} style={styles.signatureRow}>
               <View style={[styles.signatureCell, { width: CONTENT_WIDTH / 2 }]}>

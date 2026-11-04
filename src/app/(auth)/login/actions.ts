@@ -7,6 +7,7 @@ import { burnPasswordTime, verifyPassword } from '@/lib/auth/password';
 import { createSession, destroySession } from '@/lib/auth/session';
 import { homePathFor } from '@/lib/auth/rbac';
 import { audit } from '@/lib/audit/log';
+import { allowedAuthDomain, isAllowedStaffEmail } from '@/lib/auth/google';
 
 export type LoginState = { error?: string | undefined };
 
@@ -38,6 +39,14 @@ export async function login(
 
   if (!email || !email.includes('@') || !password) {
     return { error: GENERIC_ERROR };
+  }
+
+  // Enforce @dacdevelopers.com domain (plus @dac.test in local development)
+  if (!isAllowedStaffEmail(email, { allowDevSeedDomain: true })) {
+    await burnPasswordTime(password);
+    return {
+      error: `Access is restricted to @${allowedAuthDomain()} accounts only.`,
+    };
   }
 
   const h = await headers();
@@ -107,7 +116,7 @@ export async function login(
     organizationId: user.organizationId,
     userId: user.id,
     action: 'LOGIN',
-    detail: `Signed in as ${user.role.label}.`,
+    detail: `Signed in as ${user.role.label} [Role ID: ${user.roleId}].`,
   });
 
   // redirect() throws to unwind — must be outside any try/catch.

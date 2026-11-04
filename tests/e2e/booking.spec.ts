@@ -149,10 +149,10 @@ test.describe('supporting documents', () => {
     await page.getByRole('button', { name: /create draft/i }).click();
     await page.waitForURL(/\/forms\/[^/]+\/edit/);
 
-    await page.getByRole('link', { name: /supporting documents/i }).click();
+    await page.getByRole('link', { name: /supporting documents/i }).first().click();
     await page.waitForURL(/\/documents/);
 
-    await expect(page.getByText(/0 of \d+ required documents attached/i)).toBeVisible();
+    await expect(page.getByText(/0 of \d+ mandatory KYC documents attached/i)).toBeVisible();
 
     // A 1×1 PNG is enough: the server checks the magic number, not the picture.
     const png = Buffer.from(
@@ -160,21 +160,21 @@ test.describe('supporting documents', () => {
       'base64',
     );
 
-    const row = page.getByRole('listitem').filter({ hasText: /simple cost sheet/i });
+    const row = page.getByRole('listitem').filter({ hasText: /passport-size photo/i }).first();
     await row.locator('input[type="file"]').setInputFiles({
-      name: 'cost-sheet.png',
+      name: 'photo.png',
       mimeType: 'image/png',
       buffer: png,
     });
 
-    await expect(row.getByRole('link', { name: /cost-sheet\.png/i })).toBeVisible({
+    await expect(row.getByRole('link', { name: /photo.png/i })).toBeVisible({
       timeout: 20_000,
     });
-    await expect(page.getByText(/1 of \d+ required documents attached/i)).toBeVisible();
+    await expect(page.getByText(/1 of \d+ mandatory KYC documents attached/i)).toBeVisible();
 
     // And it can be taken off again.
     await row.getByRole('button', { name: /remove/i }).click();
-    await expect(page.getByText(/0 of \d+ required documents attached/i)).toBeVisible({
+    await expect(page.getByText(/0 of \d+ mandatory KYC documents attached/i)).toBeVisible({
       timeout: 20_000,
     });
   });
@@ -184,7 +184,7 @@ test.describe('supporting documents', () => {
     await page.goto('/forms/new');
     await page.getByRole('button', { name: /create draft/i }).click();
     await page.waitForURL(/\/forms\/[^/]+\/edit/);
-    await page.getByRole('link', { name: /supporting documents/i }).click();
+    await page.getByRole('link', { name: /supporting documents/i }).first().click();
     await page.waitForURL(/\/documents/);
 
     // The passport photo slot takes images only, never a PDF.

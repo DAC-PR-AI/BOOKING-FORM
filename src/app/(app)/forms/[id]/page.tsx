@@ -6,7 +6,6 @@ import { prisma } from '@/lib/db';
 import { requireUser } from '@/lib/auth/rbac';
 import { authoriseFormAccess } from '@/lib/documents/access';
 import { formatPaise } from '@/lib/format/money';
-// Aliased: @prisma/client already exports a FormStatus in this file.
 import { canActOnStep, type FormStatus as FlowFormStatus } from '@/lib/flow/act';
 import { PageHeader } from '@/components/ui/page-header';
 
@@ -14,12 +13,12 @@ export const metadata: Metadata = { title: 'Booking status' };
 export const dynamic = 'force-dynamic';
 
 const STATUS_STYLE: Record<FormStatus, string> = {
-  DRAFT: 'bg-gray-100 text-gray-700',
-  SUBMITTED: 'bg-blue-50 text-blue-700',
-  IN_REVIEW: 'bg-amber-50 text-amber-800',
-  RETURNED: 'bg-red-50 text-red-700',
-  COMPLETED: 'bg-green-50 text-green-700',
-  CANCELLED: 'bg-gray-100 text-gray-500',
+  DRAFT: 'border-slate-200 bg-slate-100 text-slate-700',
+  SUBMITTED: 'border-blue-200 bg-blue-50 text-blue-700',
+  IN_REVIEW: 'border-amber-200 bg-amber-50 text-amber-800',
+  RETURNED: 'border-red-200 bg-red-50 text-red-700',
+  COMPLETED: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+  CANCELLED: 'border-slate-200 bg-slate-100 text-slate-500',
 };
 
 const STATUS_LABEL: Record<FormStatus, string> = {
@@ -34,26 +33,49 @@ const STATUS_LABEL: Record<FormStatus, string> = {
 /** How each step reads in the timeline. */
 const STEP_PRESENTATION: Record<
   StepStatus,
-  { label: string; dot: string; text: string }
+  { label: string; dot: string; text: string; rowBg: string }
 > = {
-  LOCKED: { label: 'Not yet open', dot: 'border-gray-300 bg-white', text: 'text-gray-400' },
-  PENDING: { label: 'Waiting', dot: 'border-amber-500 bg-amber-400', text: 'text-amber-900' },
-  SIGNED: { label: 'Signed', dot: 'border-green-600 bg-green-500', text: 'text-gray-900' },
+  LOCKED: {
+    label: 'Not yet open',
+    dot: 'border-slate-300 bg-white',
+    text: 'text-slate-400',
+    rowBg: 'bg-white',
+  },
+  PENDING: {
+    label: 'Waiting for signature',
+    dot: 'border-amber-500 bg-amber-400 ring-4 ring-amber-400/20',
+    text: 'text-amber-950 font-semibold',
+    rowBg: 'bg-amber-50/40',
+  },
+  SIGNED: {
+    label: 'Signed',
+    dot: 'border-emerald-600 bg-emerald-500',
+    text: 'text-slate-900 font-semibold',
+    rowBg: 'bg-white',
+  },
   VALIDATED: {
     label: 'Validated and signed',
-    dot: 'border-green-600 bg-green-500',
-    text: 'text-gray-900',
+    dot: 'border-emerald-600 bg-emerald-500',
+    text: 'text-slate-900 font-semibold',
+    rowBg: 'bg-white',
   },
-  RETURNED: { label: 'Returned', dot: 'border-red-600 bg-red-500', text: 'text-red-900' },
+  RETURNED: {
+    label: 'Returned',
+    dot: 'border-red-600 bg-red-500 ring-4 ring-red-500/20',
+    text: 'text-red-900 font-semibold',
+    rowBg: 'bg-red-50/30',
+  },
   SKIPPED: {
     label: 'Not applicable',
-    dot: 'border-gray-200 bg-gray-100',
-    text: 'text-gray-400',
+    dot: 'border-slate-200 bg-slate-100',
+    text: 'text-slate-400',
+    rowBg: 'bg-slate-50/40',
   },
   REASSIGNED: {
     label: 'Reassigned',
-    dot: 'border-gray-400 bg-gray-300',
-    text: 'text-gray-600',
+    dot: 'border-slate-400 bg-slate-300',
+    text: 'text-slate-600',
+    rowBg: 'bg-white',
   },
 };
 
@@ -73,7 +95,6 @@ export default async function BookingStatusPage({
   const { id } = await params;
   const user = await requireUser();
 
-  // 404 rather than 403 — a signatory must not learn that a booking exists.
   const access = await authoriseFormAccess(user, id);
   if (!access) notFound();
 
@@ -116,9 +137,9 @@ export default async function BookingStatusPage({
     (r) => r.status === 'SIGNED' || r.status === 'VALIDATED',
   ).length;
   const applicableCount = records.filter((r) => r.status !== 'SKIPPED').length;
+  const progressPercent =
+    applicableCount > 0 ? Math.min(100, Math.round((signedCount / applicableCount) * 100)) : 0;
 
-  // Which step, if any, this viewer can act on right now. Same function the
-  // signing page and the queue use, so the three cannot disagree.
   const actor = {
     userId: user.id,
     roleId: user.roleId,
@@ -141,14 +162,14 @@ export default async function BookingStatusPage({
   );
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="mx-auto max-w-4xl">
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <PageHeader
           title={form.bookingId ?? 'Booking Form (draft)'}
           description={primary?.fullName ?? 'No applicant name entered yet.'}
         />
         <span
-          className={`rounded-full px-3 py-1 text-xs font-semibold ${STATUS_STYLE[form.status]}`}
+          className={`rounded-full border px-3.5 py-1 text-xs font-bold ${STATUS_STYLE[form.status]}`}
         >
           {STATUS_LABEL[form.status]}
         </span>
@@ -158,7 +179,7 @@ export default async function BookingStatusPage({
         {actionable ? (
           <Link
             href={`/forms/${form.id}/sign/${actionable.orderIndex}`}
-            className="rounded-md bg-dac-navy-700 px-3 py-2 text-sm font-semibold text-white transition hover:bg-dac-navy-900"
+            className="rounded-xl bg-gradient-to-r from-dac-navy-800 to-dac-navy-700 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:from-dac-navy-900 hover:to-dac-navy-800"
           >
             {actionable.flowStep.actsOnCreatorDevice
               ? `Capture ${actionable.flowStep.label} signature`
@@ -171,13 +192,13 @@ export default async function BookingStatusPage({
           <>
             <Link
               href={`/forms/${form.id}/edit`}
-              className="rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+              className="rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-2xs transition hover:bg-slate-50"
             >
               Edit the form
             </Link>
             <Link
               href={`/forms/${form.id}/review`}
-              className="rounded-md bg-dac-navy-700 px-3 py-2 text-sm font-semibold text-white transition hover:bg-dac-navy-900"
+              className="rounded-xl bg-dac-navy-700 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-dac-navy-900"
             >
               {form.status === 'RETURNED' ? 'Review and resubmit' : 'Review and submit'}
             </Link>
@@ -188,52 +209,55 @@ export default async function BookingStatusPage({
             href={`/forms/${form.id}/pdf`}
             target="_blank"
             rel="noreferrer"
-            className="rounded-md bg-green-700 px-3 py-2 text-sm font-semibold text-white transition hover:bg-green-800"
+            className="rounded-xl bg-emerald-700 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-800"
           >
             Download the signed PDF
           </a>
         ) : null}
         <Link
           href={`/forms/${form.id}/documents`}
-          className="rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+          className="rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-2xs transition hover:bg-slate-50"
         >
           Documents ({form._count.documents})
         </Link>
         {form.tncVersion ? (
           <Link
             href={`/forms/${form.id}/terms`}
-            className="rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+            className="rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-2xs transition hover:bg-slate-50"
           >
             Terms accepted ({form.tncVersion.version})
           </Link>
         ) : null}
         <Link
           href="/forms"
-          className="rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+          className="rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-2xs transition hover:bg-slate-50"
         >
           My forms
         </Link>
       </div>
 
       {form.status === 'COMPLETED' ? (
-        <p className="mb-6 rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900">
+        <div className="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50/90 px-5 py-4 text-sm text-emerald-950 shadow-2xs">
           All nine signatures are collected. The PDF is produced once and kept unchanged, with
           a SHA-256 recorded against it — downloading it again always returns the same document.
-        </p>
+        </div>
       ) : null}
 
       {form.status === 'RETURNED' ? (
-        <p className="mb-6 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
+        <div className="mb-6 rounded-2xl border border-red-200 bg-red-50/90 px-5 py-4 text-sm text-red-900 shadow-2xs">
           This booking was returned for changes
           {form.returnToStepOrder ? ` at step ${form.returnToStepOrder}` : null}. Make the
           changes, then resubmit — the flow resumes from the step that returned it, not from
           the beginning.
-        </p>
+        </div>
       ) : null}
 
       {/* --- Facts -------------------------------------------------------- */}
-      <section className="mb-6 rounded-lg border border-gray-200 bg-white p-4">
-        <dl className="grid gap-x-8 gap-y-2 text-sm sm:grid-cols-2">
+      <section className="mb-6 rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs">
+        <h2 className="mb-3.5 text-xs font-bold tracking-wider text-dac-navy-900 uppercase">
+          Booking Details
+        </h2>
+        <dl className="grid gap-x-8 gap-y-2.5 text-sm sm:grid-cols-2">
           <Row label="Project" value={form.project?.name ?? '—'} />
           <Row
             label="Property"
@@ -267,51 +291,65 @@ export default async function BookingStatusPage({
       </section>
 
       {/* --- The signature pipeline --------------------------------------- */}
-      <section className="rounded-lg border border-gray-200 bg-white">
-        <header className="flex flex-wrap items-baseline justify-between gap-2 border-b border-gray-200 px-4 py-3">
-          <h2 className="text-sm font-semibold text-gray-900">Signature flow</h2>
+      <section className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-xs">
+        <header className="border-b border-slate-200 bg-slate-50/70 px-5 py-4">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="text-sm font-bold text-slate-900">Signature flow</h2>
+            {records.length > 0 ? (
+              <span className="text-xs font-semibold text-slate-600">
+                {signedCount} of {applicableCount} signed
+                {pending ? ` · waiting on ${pending.flowStep.label}` : null}
+              </span>
+            ) : null}
+          </div>
+
           {records.length > 0 ? (
-            <span className="text-xs text-gray-500">
-              {signedCount} of {applicableCount} signed
-              {pending ? ` · waiting on ${pending.flowStep.label}` : null}
-            </span>
+            <div className="mt-2.5 h-1.5 w-full overflow-hidden rounded-full bg-slate-200" aria-hidden="true">
+              <div
+                className="h-full bg-emerald-500 transition-all duration-300"
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
           ) : null}
         </header>
 
         {records.length === 0 ? (
-          <p className="px-4 py-4 text-sm text-gray-600">
+          <p className="px-5 py-5 text-sm text-slate-600">
             The signature flow starts when this booking is submitted. All nine steps are created
             at that point, and the second-applicant step is skipped automatically when there is
             only one applicant.
           </p>
         ) : (
-          <ol className="divide-y divide-gray-100">
+          <ol className="divide-y divide-slate-100">
             {records.map((record) => {
               const presentation = STEP_PRESENTATION[record.status];
               const isApplicantStep = record.flowStep.actsOnCreatorDevice;
               const isActionable = actionable?.id === record.id;
 
               return (
-                <li key={record.id} className="flex gap-3 px-4 py-3">
+                <li
+                  key={record.id}
+                  className={`flex gap-3.5 px-5 py-4 transition ${presentation.rowBg}`}
+                >
                   <div className="flex flex-col items-center pt-1">
                     <span
                       aria-hidden
-                      className={`h-3 w-3 shrink-0 rounded-full border-2 ${presentation.dot}`}
+                      className={`h-3.5 w-3.5 shrink-0 rounded-full border-2 ${presentation.dot}`}
                     />
                   </div>
 
                   <div className="min-w-0 flex-1">
-                    <p className={`text-sm font-medium ${presentation.text}`}>
-                      <span className="tabular-nums text-gray-400">{record.orderIndex}.</span>{' '}
+                    <p className={`text-sm ${presentation.text}`}>
+                      <span className="tabular-nums text-slate-400">{record.orderIndex}.</span>{' '}
                       {record.flowStep.label}
                       {record.flowStep.action === 'VALIDATE_AND_SIGN' ? (
-                        <span className="ml-2 rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-700">
+                        <span className="ml-2 rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-700">
                           Validate + sign
                         </span>
                       ) : null}
                     </p>
 
-                    <p className="mt-0.5 text-xs text-gray-500">
+                    <p className="mt-0.5 text-xs text-slate-500">
                       {presentation.label}
                       {record.actedAt ? ` · ${formatIst(record.actedAt)}` : null}
                       {record.signatureAsset?.signerName
@@ -328,29 +366,25 @@ export default async function BookingStatusPage({
                     </p>
 
                     {record.comment ? (
-                      <p className="mt-1 rounded border border-red-200 bg-red-50 px-2 py-1 text-xs text-red-900">
+                      <p className="mt-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-900">
                         {record.comment}
                       </p>
                     ) : null}
                   </div>
 
                   {record.signatureAsset ? (
-                    /*
-                      Plain <img>, never next/image: the optimiser would fetch
-                      and cache a signature on a CDN outside India (brief §3).
-                    */
                     /* eslint-disable-next-line @next/next/no-img-element */
                     <img
                       src={`/api/signatures/${record.signatureAsset.id}`}
                       alt={`Signature for ${record.flowStep.label}`}
-                      className="h-8 w-24 shrink-0 self-center object-contain"
+                      className="h-9 w-28 shrink-0 self-center rounded border border-slate-200 bg-white p-1 object-contain"
                     />
                   ) : null}
 
                   {isActionable ? (
                     <Link
                       href={`/forms/${form.id}/sign/${record.orderIndex}`}
-                      className="shrink-0 self-center rounded-md bg-dac-navy-700 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-dac-navy-900"
+                      className="shrink-0 self-center rounded-xl bg-dac-navy-700 px-3.5 py-1.5 text-xs font-bold text-white shadow-2xs transition hover:bg-dac-navy-900"
                     >
                       {record.flowStep.actsOnCreatorDevice ? 'Capture' : 'Sign'}
                     </Link>
@@ -367,9 +401,9 @@ export default async function BookingStatusPage({
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex justify-between gap-4 border-b border-gray-100 pb-1">
-      <dt className="text-gray-600">{label}</dt>
-      <dd className="text-right font-medium text-gray-900">{value}</dd>
+    <div className="flex justify-between gap-4 border-b border-slate-100 pb-1.5">
+      <dt className="text-slate-500">{label}</dt>
+      <dd className="text-right font-semibold text-slate-900">{value}</dd>
     </div>
   );
 }

@@ -80,7 +80,41 @@ export default async function DocumentsPage({
   const primaryName = form.applicants.find((a) => a.applicantType === 'PRIMARY')?.fullName;
 
   return (
-    <>
+    <div className="mx-auto max-w-4xl">
+      {/* 3-Step Workflow Bar */}
+      {access.editable ? (
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-2.5 rounded-xl border border-slate-200/90 bg-white px-4 py-3 text-xs shadow-2xs">
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href={`/forms/${form.id}/edit`}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 font-semibold text-dac-navy-700 transition hover:border-dac-navy-300 hover:bg-dac-navy-50"
+            >
+              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-dac-navy-100 text-[10px] text-dac-navy-800">
+                1
+              </span>
+              <span>Booking Form</span>
+            </Link>
+            <span className="text-slate-300" aria-hidden="true">→</span>
+            <span className="inline-flex items-center gap-1.5 rounded-lg bg-dac-navy-800 px-2.5 py-1 font-semibold text-white shadow-2xs">
+              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-white/20 text-[10px]">
+                2
+              </span>
+              <span>Supporting documents</span>
+            </span>
+            <span className="text-slate-300" aria-hidden="true">→</span>
+            <Link
+              href={`/forms/${form.id}/review`}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 font-semibold text-dac-navy-700 transition hover:border-dac-navy-300 hover:bg-dac-navy-50"
+            >
+              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-dac-navy-100 text-[10px] text-dac-navy-800">
+                3
+              </span>
+              <span>Review and submit</span>
+            </Link>
+          </div>
+        </div>
+      ) : null}
+
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <PageHeader
           title="Supporting Documents"
@@ -90,47 +124,63 @@ export default async function DocumentsPage({
               : 'Attachments for this booking.'
           }
         />
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {access.editable ? (
-            <Link
-              href={`/forms/${form.id}/edit`}
-              className="rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
-            >
-              Back to the form
-            </Link>
+            <>
+              <Link
+                href={`/forms/${form.id}/edit`}
+                className="rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-2xs transition hover:bg-slate-50"
+              >
+                ← Back to the form
+              </Link>
+              <Link
+                href={`/forms/${form.id}/review`}
+                className="rounded-xl bg-gradient-to-r from-dac-navy-800 to-dac-navy-700 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:from-dac-navy-900 hover:to-dac-navy-800"
+              >
+                Review &amp; Submit →
+              </Link>
+            </>
           ) : null}
           <Link
             href={`/forms/${form.id}`}
-            className="rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+            className="rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-2xs transition hover:bg-slate-50"
           >
             Booking status
           </Link>
           <Link
             href="/forms"
-            className="rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+            className="rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-2xs transition hover:bg-slate-50"
           >
             My forms
           </Link>
         </div>
       </div>
 
-      {!access.editable ? (
-        <p className="mb-6 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          This booking is no longer a draft, so its documents are locked. You can still open
-          them.
-        </p>
+      {!access.editable && access.canUploadAnytime ? (
+        <div className="mb-6 rounded-xl border border-blue-200 bg-blue-50/80 px-4 py-3.5 text-sm text-blue-900 shadow-2xs">
+          Mandatory identity documents (Photo, PAN, Aadhaar) are locked once submitted. You can
+          still upload or update any other supporting documents (1st payment screenshot, cost
+          sheets, mail) at any time.
+        </div>
+      ) : null}
+
+      {!access.canUploadAnytime ? (
+        <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3.5 text-sm text-amber-900 shadow-2xs">
+          This booking has been cancelled, so its documents are locked. You can still open them.
+        </div>
       ) : null}
 
       {!hasSecondApplicant ? (
-        <p className="mb-6 text-sm text-gray-600">
-          Second-applicant documents are not listed because this booking has one applicant.
-          Add a second applicant on the form and they will appear here.
+        <p className="mb-5 text-xs font-medium text-slate-500">
+          Second-applicant documents are not listed because this booking has one applicant. Add a
+          second applicant on the form and they will appear here.
         </p>
       ) : null}
 
       <DocumentChecklist
         bookingFormId={form.id}
         editable={access.editable}
+        canUploadAnytime={access.canUploadAnytime}
         slots={slots.map((slot) => ({
           typeId: slot.type.id,
           typeKey: slot.type.key,
@@ -152,6 +202,6 @@ export default async function DocumentsPage({
         }))}
         progress={progress}
       />
-    </>
+    </div>
   );
 }

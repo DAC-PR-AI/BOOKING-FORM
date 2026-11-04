@@ -25,8 +25,16 @@ import type { SessionUser } from '@/lib/auth/session';
 
 export type DocumentAccess = {
   bookingFormId: string;
-  /** True when the form is still the creator's to change. */
+  /** Form status */
+  status: string;
+  /** True when the form itself (and mandatory identity documents) can be edited: DRAFT or RETURNED by creator/admin. */
   editable: boolean;
+  /**
+   * True when non-mandatory supporting documents (e.g. 1st payment screenshot,
+   * cost sheets, mail) can be uploaded or updated at any time during the
+   * booking lifecycle (any status other than CANCELLED).
+   */
+  canUploadAnytime: boolean;
   /** The creator, or an Admin standing in for them. */
   isCreator: boolean;
 };
@@ -66,10 +74,13 @@ export async function authoriseFormAccess(
 
   const isCreator = form.createdById === user.id || user.role.name === 'ADMIN';
   const statusAllowsEditing = (EDITABLE_STATUSES as readonly string[]).includes(form.status);
+  const canUploadAnytime = form.status !== 'CANCELLED';
 
   return {
     bookingFormId: form.id,
+    status: form.status,
     editable: isCreator && statusAllowsEditing,
+    canUploadAnytime,
     isCreator,
   };
 }
