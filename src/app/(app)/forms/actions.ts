@@ -6,6 +6,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { requireRole } from '@/lib/auth/rbac';
 import { audit } from '@/lib/audit/log';
+import { isValidUuid } from '@/lib/documents/access';
 import { draftSchema, type DraftInput } from '@/lib/validation/booking-form';
 import { parseRupeesToPaise } from '@/lib/format/money';
 import { encryptField, last4, toDbBytes } from '@/lib/crypto/field-encryption';
@@ -70,6 +71,10 @@ export type SaveResult =
 export async function saveDraft(formId: string, payload: DraftInput): Promise<SaveResult> {
   const user = await requireRole('SALES_EXECUTIVE', 'ADMIN');
 
+  if (typeof formId !== 'string' || !isValidUuid(formId)) {
+    return { ok: false, error: 'Form not found.' };
+  }
+
   const parsed = draftSchema.safeParse(payload);
   if (!parsed.success) {
     return { ok: false, error: 'Some values were too long to save.' };
@@ -95,6 +100,23 @@ export async function saveDraft(formId: string, payload: DraftInput): Promise<Sa
     };
   }
 
+  // Verify projectId belongs to the user's organization to prevent cross-tenant FK linking.
+  let validProjectId: string | null = null;
+  if (d.projectId && d.projectId.trim().length > 0) {
+    const trimmedProjectId = d.projectId.trim();
+    if (!isValidUuid(trimmedProjectId)) {
+      return { ok: false, error: 'Selected project was not found.' };
+    }
+    const project = await prisma.project.findFirst({
+      where: { id: trimmedProjectId, organizationId: user.organizationId },
+      select: { id: true },
+    });
+    if (!project) {
+      return { ok: false, error: 'Selected project was not found.' };
+    }
+    validProjectId = project.id;
+  }
+
   const money = (v: string | undefined): bigint | null => {
     if (!v) return null;
     const r = parseRupeesToPaise(v);
@@ -118,7 +140,7 @@ export async function saveDraft(formId: string, payload: DraftInput): Promise<Sa
       where: { id: form.id },
       data: {
         bookingDate: date(d.bookingDate) ?? form.bookingDate,
-        projectId: d.projectId || null,
+        projectId: validProjectId,
         propertyType: enumOrNull(d.propertyType, ['VILLA', 'PLOT', 'APARTMENT'] as const),
         apartmentNo: d.apartmentNo || null,
         salesExecutive: d.salesExecutive || null,

@@ -57,9 +57,9 @@ export default async function AuditPage({
   const { group, q, page } = await searchParams;
   const user = await requireAdmin();
 
-  const currentPage = Math.max(1, Number.parseInt(page ?? '1', 10) || 1);
+  const currentPage = Math.min(10_000, Math.max(1, Number.parseInt(page ?? '1', 10) || 1));
   const selected = ACTION_GROUPS.find((g) => g.label === group);
-  const search = q?.trim() ?? '';
+  const search = (q?.trim() ?? '').slice(0, 120);
 
   const where: Prisma.AuditLogWhereInput = {
     organizationId: user.organizationId,

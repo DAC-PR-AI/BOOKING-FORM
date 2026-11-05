@@ -4,7 +4,7 @@ import { getSessionUser } from '@/lib/auth/session';
 import { audit } from '@/lib/audit/log';
 import { storage } from '@/lib/storage';
 import { DOWNLOAD_URL_TTL_SECONDS } from '@/lib/storage/upload-token';
-import { authoriseFormAccess, isSensitiveDocumentType } from '@/lib/documents/access';
+import { authoriseFormAccess, isSensitiveDocumentType, isValidUuid } from '@/lib/documents/access';
 
 /**
  * The only way to read a supporting document.
@@ -28,6 +28,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
   const { id } = await params;
+  if (!isValidUuid(id)) return notFound();
 
   const user = await getSessionUser();
   if (!user) return notFound();

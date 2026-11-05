@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import type { Applicant } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { requireRole } from '@/lib/auth/rbac';
+import { isValidUuid } from '@/lib/documents/access';
 import { paiseToInputValue } from '@/lib/format/money';
 import { BookingFormEditor, type EditorState } from './booking-form-editor';
 
@@ -41,6 +42,7 @@ export default async function EditBookingFormPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  if (!isValidUuid(id)) notFound();
   const user = await requireRole('SALES_EXECUTIVE', 'ADMIN');
 
   const form = await prisma.bookingForm.findFirst({
@@ -89,6 +91,16 @@ export default async function EditBookingFormPage({
   const communication = form.addresses.find((a) => a.type === 'COMMUNICATION');
   const permanent = form.addresses.find((a) => a.type === 'PERMANENT');
 
+  const hasCommAddress = Boolean(
+    communication?.line1 || communication?.line2 || communication?.line3 || communication?.line4,
+  );
+  const sameAsCommunication =
+    hasCommAddress &&
+    (communication?.line1 ?? '') === (permanent?.line1 ?? '') &&
+    (communication?.line2 ?? '') === (permanent?.line2 ?? '') &&
+    (communication?.line3 ?? '') === (permanent?.line3 ?? '') &&
+    (communication?.line4 ?? '') === (permanent?.line4 ?? '');
+
   const initial: EditorState = {
     bookingDate: isoOrEmpty(form.bookingDate),
     projectId: form.projectId ?? '',
@@ -113,7 +125,7 @@ export default async function EditBookingFormPage({
     salePrice: form.salePricePaise ? paiseToInputValue(form.salePricePaise) : '',
     remarks: form.remarks ?? '',
     hasSecondApplicant: Boolean(secondary),
-    sameAsCommunication: false,
+    sameAsCommunication,
     firstApplicant: applicantToState(primary),
     secondApplicant: applicantToState(secondary),
     communicationAddress: {

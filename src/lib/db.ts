@@ -13,7 +13,13 @@ import { env, isProduction } from './env';
  * setting, so a DB read there would execute outside India.
  */
 
-const adapter = new PrismaPg({ connectionString: env.DATABASE_URL });
+const adapter = new PrismaPg({
+  connectionString: env.DATABASE_URL,
+  max: 10,
+  idleTimeoutMillis: 20_000,
+  connectionTimeoutMillis: 15_000,
+  keepAlive: true,
+});
 
 function createClient(): PrismaClient {
   return new PrismaClient({

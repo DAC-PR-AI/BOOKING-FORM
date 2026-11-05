@@ -542,7 +542,7 @@ npm run test:e2e          # needs a database and a seeded org
    real accounts and deactivate the demo ones.
 3. **Vercel**: import the repo, set every variable from `.env.example`, and confirm the
    project region is **Mumbai**. `vercel.json` pins functions to `bom1` and registers three
-   crons (health keep-alive, project sync, digest).
+   crons (health keep-alive, project sync, digest). Make sure `CRON_SECRET` is configured in production environment variables; `/api/health` and all cron routes fail closed (`401`) in production if `CRON_SECRET` is unset.
 4. **Verify the region of `proxy.ts` in the function logs.** PLAN.md §3 has flagged this as
    unresolved since Phase 1: Vercel documents Routing Middleware as deploying to all regions
    regardless of the `regions` setting, and whether the renamed Node-runtime proxy still does
@@ -556,6 +556,7 @@ npm run test:e2e          # needs a database and a seeded org
 * **Vercel Hobby is non-commercial use only** → move to **Pro**.
 * **Supabase Free has no backups and pauses after ~7 days idle** → move to **Pro**.
   (A daily cron hits `/api/health` to defeat the pause meanwhile.)
+* **`CRON_SECRET` must be set in production** so `/api/health` and all cron routes authenticate callers and fail closed against unauthorized traffic.
 * **`content/terms/v1.md` is transcribed from a photograph and not yet approved.** Its
   review checklist must be signed off, and `tnc_versions.is_approved` set, before any real
   customer signs.

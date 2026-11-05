@@ -26,9 +26,23 @@ describe('audit redaction', () => {
     expect(out).toEqual({ panLast4: REDACTED, aadhaarLast4: REDACTED });
   });
 
-  it('redacts credentials and session tokens', () => {
-    const out = redact({ passwordHash: '$argon2id$...', tokenHash: 'deadbeef' });
-    expect(out).toEqual({ passwordHash: REDACTED, tokenHash: REDACTED });
+  it('redacts credentials, secrets, and session tokens case-insensitively', () => {
+    const out = redact({
+      passwordHash: '$argon2id$...',
+      tokenHash: 'deadbeef',
+      PAN: 'ABCDE1234F',
+      aadhaarNo: '234567890123',
+      privateKey: '-----BEGIN PRIVATE KEY-----',
+      authorization: 'Bearer secret',
+    });
+    expect(out).toEqual({
+      passwordHash: REDACTED,
+      tokenHash: REDACTED,
+      PAN: REDACTED,
+      aadhaarNo: REDACTED,
+      privateKey: REDACTED,
+      authorization: REDACTED,
+    });
   });
 
   it('leaves non-sensitive values untouched', () => {

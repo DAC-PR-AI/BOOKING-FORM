@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { env } from '@/lib/env';
+import { verifyCronAuth } from '@/lib/auth/cron';
 import { googleConfig } from '@/lib/google/sheets';
 import { runProjectSync } from '@/lib/projects/sync';
 
@@ -28,11 +29,14 @@ export const maxDuration = 60;
 export async function GET(request: Request): Promise<NextResponse> {
   // Vercel Cron sends the secret as a bearer token. Without this the endpoint
   // is a free way for anyone to make us hammer Google's API.
-  if (env.CRON_SECRET) {
-    const auth = request.headers.get('authorization');
-    if (auth !== `Bearer ${env.CRON_SECRET}`) {
-      return NextResponse.json({ ok: false }, { status: 401 });
-    }
+  if (
+    !verifyCronAuth(request.headers.get('authorization'), {
+      cronSecret: env.CRON_SECRET,
+      nodeEnv: env.NODE_ENV,
+      failClosedInProd: true,
+    })
+  ) {
+    return NextResponse.json({ ok: false }, { status: 401 });
   }
 
   if (!googleConfig()) {
@@ -54,12 +58,12 @@ export async function GET(request: Request): Promise<NextResponse> {
       organization: organization.slug,
       ...(outcome.ok
         ? {
-            ok: true,
-            created: outcome.created,
-            updated: outcome.updated,
-            deactivated: outcome.deactivated,
-            skippedRows: outcome.problems.length,
-          }
+          ok: true,
+          created: outcome.created,
+          updated: outcome.updated,
+          deactivated: outcome.deactivated,
+          skippedRows: outcome.problems.length,
+        }
         : { ok: false, error: outcome.error }),
     });
   }

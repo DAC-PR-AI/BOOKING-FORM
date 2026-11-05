@@ -3,7 +3,7 @@ import { prisma } from '@/lib/db';
 import { getSessionUser } from '@/lib/auth/session';
 import { storage } from '@/lib/storage';
 import { DOWNLOAD_URL_TTL_SECONDS } from '@/lib/storage/upload-token';
-import { authoriseFormAccess } from '@/lib/documents/access';
+import { authoriseFormAccess, isValidUuid } from '@/lib/documents/access';
 
 /**
  * Serves a captured signature image.
@@ -29,6 +29,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
   const { id } = await params;
+  if (!isValidUuid(id)) return notFound();
 
   const user = await getSessionUser();
   if (!user) return notFound();

@@ -23,15 +23,28 @@ const OPTIONS = {
   // which cannot be imported under `isolatedModules`.
 } as const;
 
+/**
+ * Upper bound on password byte length before passing to Argon2id.
+ * Prevents CPU/memory exhaustion (DoS) via multi-megabyte password strings.
+ */
+export const MAX_PASSWORD_BYTES = 128;
+
 export async function hashPassword(plain: string): Promise<string> {
+  if (Buffer.byteLength(plain, 'utf8') > MAX_PASSWORD_BYTES) {
+    throw new Error(`Password exceeds maximum length of ${MAX_PASSWORD_BYTES} bytes.`);
+  }
   return hash(plain, OPTIONS);
 }
 
 /**
- * Returns false rather than throwing on a malformed stored hash, so a corrupt
- * row cannot be distinguished from a wrong password by timing or by error text.
+ * Returns false rather than throwing on a malformed stored hash or oversized
+ * input, so a corrupt row or oversized payload cannot be distinguished from a
+ * wrong password by error text or cause an Argon2 DoS.
  */
 export async function verifyPassword(storedHash: string, plain: string): Promise<boolean> {
+  if (Buffer.byteLength(plain, 'utf8') > MAX_PASSWORD_BYTES) {
+    return false;
+  }
   try {
     return await verify(storedHash, plain, OPTIONS);
   } catch {
@@ -53,6 +66,7 @@ export async function verifyPassword(storedHash: string, plain: string): Promise
 let decoyHash: Promise<string> | null = null;
 
 export function burnPasswordTime(plain: string): Promise<boolean> {
+  const bounded = plain.slice(0, MAX_PASSWORD_BYTES);
   decoyHash ??= hashPassword(`decoy:${Math.random()}:${Date.now()}`);
-  return decoyHash.then((stored) => verifyPassword(stored, plain));
+  return decoyHash.then((stored) => verifyPassword(stored, bounded));
 }

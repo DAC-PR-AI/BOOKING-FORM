@@ -27,8 +27,8 @@ const config = [
     },
   },
   {
-    // The seed script is a CLI — printing is the point.
-    files: ['prisma/**/*.ts', 'scripts/**/*.ts'],
+    // The seed and verification scripts are CLIs — printing is the point.
+    files: ['prisma/**/*.ts', 'scripts/**/*.ts', 'scripts/**/*.tsx'],
     rules: { 'no-console': 'off' },
   },
 ];

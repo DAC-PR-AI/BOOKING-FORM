@@ -3,7 +3,7 @@
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/db';
-import { burnPasswordTime, verifyPassword } from '@/lib/auth/password';
+import { burnPasswordTime, MAX_PASSWORD_BYTES, verifyPassword } from '@/lib/auth/password';
 import { createSession, destroySession } from '@/lib/auth/session';
 import { homePathFor } from '@/lib/auth/rbac';
 import { audit } from '@/lib/audit/log';
@@ -37,7 +37,13 @@ export async function login(
   const next = formData.get('next');
   const nextPath = typeof next === 'string' ? next : undefined;
 
-  if (!email || !email.includes('@') || !password) {
+  if (
+    !email ||
+    email.length > 254 ||
+    !email.includes('@') ||
+    !password ||
+    Buffer.byteLength(password, 'utf8') > MAX_PASSWORD_BYTES
+  ) {
     return { error: GENERIC_ERROR };
   }
 

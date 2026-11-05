@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { env } from '@/lib/env';
+import { verifyCronAuth } from '@/lib/auth/cron';
 import { storageStatus } from '@/lib/storage';
 
 /**
@@ -21,13 +22,17 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request): Promise<NextResponse> {
-  // When CRON_SECRET is configured, require it. Vercel Cron sends it as a
-  // bearer token; this keeps the endpoint from being a free DB ping for anyone.
-  if (env.CRON_SECRET) {
-    const auth = request.headers.get('authorization');
-    if (auth !== `Bearer ${env.CRON_SECRET}`) {
-      return NextResponse.json({ ok: false }, { status: 401 });
-    }
+  // When CRON_SECRET is configured, require it in constant time. Vercel Cron
+  // sends it as a bearer token; this keeps the endpoint from being a free DB
+  // ping for anyone.
+  if (
+    !verifyCronAuth(request.headers.get('authorization'), {
+      cronSecret: env.CRON_SECRET,
+      nodeEnv: env.NODE_ENV,
+      failClosedInProd: true,
+    })
+  ) {
+    return NextResponse.json({ ok: false }, { status: 401 });
   }
 
   const startedAt = Date.now();

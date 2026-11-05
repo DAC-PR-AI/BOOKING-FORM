@@ -1,5 +1,6 @@
 import { type NextRequest } from 'next/server';
 import { getSessionUser } from '@/lib/auth/session';
+import { audit } from '@/lib/audit/log';
 import { authoriseFormAccess } from '@/lib/documents/access';
 import { storage } from '@/lib/storage';
 import { DOWNLOAD_URL_TTL_SECONDS } from '@/lib/storage/upload-token';
@@ -58,6 +59,19 @@ export async function GET(
     return new Response(result.error, {
       status: result.error.startsWith('Booking not found') ? 404 : 409,
       headers: { 'cache-control': 'no-store, private' },
+    });
+  }
+
+  // First-time generation already records VIEW_SENSITIVE inside getOrCreatePdf.
+  // Repeat downloads of the stored PDF must also record VIEW_SENSITIVE because
+  // the printed PDF contains full unmasked PAN and 12-digit Aadhaar numbers.
+  if (!result.freshlyGenerated) {
+    await audit({
+      organizationId: user.organizationId,
+      userId: user.id,
+      bookingFormId: access.bookingFormId,
+      action: 'VIEW_SENSITIVE',
+      detail: `Downloaded stored booking form PDF (sha256 ${result.pdf.sha256.slice(0, 12)}…) containing full PAN and Aadhaar.`,
     });
   }
 

@@ -75,9 +75,23 @@ export default async function SystemPage() {
   const admin = await requireAdmin();
 
   const [documents, signatures, pdfs, counts, sync] = await Promise.all([
-    prisma.formDocument.aggregate({ _sum: { sizeBytes: true }, _count: true }),
-    prisma.signatureAsset.count(),
-    prisma.generatedPdf.aggregate({ _sum: { sizeBytes: true }, _count: true }),
+    prisma.formDocument.aggregate({
+      where: { bookingForm: { organizationId: admin.organizationId } },
+      _sum: { sizeBytes: true },
+      _count: true,
+    }),
+    prisma.signatureAsset.count({
+      where: {
+        stepRecord: {
+          flowInstance: { bookingForm: { organizationId: admin.organizationId } },
+        },
+      },
+    }),
+    prisma.generatedPdf.aggregate({
+      where: { bookingForm: { organizationId: admin.organizationId } },
+      _sum: { sizeBytes: true },
+      _count: true,
+    }),
     Promise.all([
       prisma.bookingForm.count({ where: { organizationId: admin.organizationId } }),
       prisma.bookingForm.count({
@@ -85,7 +99,9 @@ export default async function SystemPage() {
       }),
       prisma.auditLog.count({ where: { organizationId: admin.organizationId } }),
       prisma.user.count({ where: { organizationId: admin.organizationId, isActive: true } }),
-      prisma.notification.count({ where: { readAt: null } }),
+      prisma.notification.count({
+        where: { readAt: null, user: { organizationId: admin.organizationId } },
+      }),
     ]),
     syncStatus(admin.organizationId),
   ]);

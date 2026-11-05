@@ -1,22 +1,41 @@
 import 'server-only';
 import { randomBytes } from 'node:crypto';
+import { RoleName } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { audit } from '@/lib/audit/log';
+import { allowedAuthDomain } from '@/lib/auth/google';
 import { hashPassword } from '@/lib/auth/password';
 import { googleUsersConfig, readUsersRows, sheetUrl } from '@/lib/google/sheets';
-import { parseUserSheet, type SheetUser, type UserSheetProblem } from './sheet';
+import {
+  parseUserSheet,
+  planUserSync,
+  type ExistingUserForSync,
+  type PlanUserSyncResult,
+  type SheetUser,
+  type UserRoleForSync,
+  type UserSheetProblem,
+  type UserSyncAction,
+} from './sheet';
+
+export {
+  planUserSync,
+  type ExistingUserForSync,
+  type PlanUserSyncResult,
+  type UserRoleForSync,
+  type UserSyncAction,
+};
 
 export type UserSyncOutcome =
   | {
-    ok: true;
-    created: number;
-    updated: number;
-    unchanged: number;
-    deactivated: number;
-    problems: UserSheetProblem[];
-    sheetLink: string;
-    at: Date;
-  }
+      ok: true;
+      created: number;
+      updated: number;
+      unchanged: number;
+      deactivated: number;
+      problems: UserSheetProblem[];
+      sheetLink: string;
+      at: Date;
+    }
   | { ok: false; error: string; at: Date };
 
 export type UserSyncStatus = {
@@ -87,7 +106,9 @@ export async function runUserSync({
     };
   }
 
-  const { users: sheetUsers, problems } = parseUserSheet(rows);
+  const { users: sheetUsers, problems } = parseUserSheet(rows, {
+    allowedDomain: allowedAuthDomain(),
+  });
 
   if (problems.length > 0 && sheetUsers.length === 0) {
     return {
@@ -99,7 +120,6 @@ export async function runUserSync({
 
   // Fetch all roles from DB
   const roles = await prisma.role.findMany({ select: { id: true, name: true } });
-  const roleMap = new Map(roles.map((r) => [r.name, r.id]));
 
   // Fetch current users in DB
   const existingUsers = await prisma.user.findMany({
@@ -113,55 +133,20 @@ export async function runUserSync({
       isActive: true,
     },
   });
-  const existingByEmail = new Map(existingUsers.map((u) => [u.email.toLowerCase(), u]));
 
-  let created = 0;
-  let updated = 0;
-  let unchanged = 0;
-  let deactivated = 0;
-
-  type Action =
-    | { type: 'CREATE'; user: SheetUser; roleId: string }
-    | { type: 'UPDATE'; id: string; user: SheetUser; roleId: string }
-    | { type: 'DEACTIVATE'; id: string; email: string };
-
-  const actions: Action[] = [];
-
-  for (const sheetUser of sheetUsers) {
-    const roleId = roleMap.get(sheetUser.roleName);
-    if (!roleId) {
-      problems.push({
-        sourceRow: sheetUser.sourceRow,
-        reason: `Role ${sheetUser.roleName} not found in database.`,
-      });
-      continue;
-    }
-
-    const existing = existingByEmail.get(sheetUser.email);
-    if (!existing) {
-      if (sheetUser.isActive) {
-        actions.push({ type: 'CREATE', user: sheetUser, roleId });
-        created++;
-      }
-    } else {
-      const needsUpdate =
-        existing.name !== sheetUser.name ||
-        existing.roleId !== roleId ||
-        existing.phone !== sheetUser.phone ||
-        existing.isActive !== sheetUser.isActive;
-
-      if (needsUpdate) {
-        actions.push({ type: 'UPDATE', id: existing.id, user: sheetUser, roleId });
-        if (!sheetUser.isActive && existing.isActive) {
-          deactivated++;
-        } else {
-          updated++;
-        }
-      } else {
-        unchanged++;
-      }
-    }
-  }
+  const {
+    actions,
+    problems: syncProblems,
+    created,
+    updated,
+    unchanged,
+    deactivated,
+  } = planUserSync({
+    sheetUsers,
+    roles,
+    existingUsers,
+    initialProblems: problems,
+  });
 
   if (dryRun) {
     return {
@@ -170,7 +155,7 @@ export async function runUserSync({
       updated,
       unchanged,
       deactivated,
-      problems,
+      problems: syncProblems,
       sheetLink: sheetUrl(config),
       at,
     };
@@ -207,8 +192,8 @@ export async function runUserSync({
           },
         });
 
-        // If deactivated, revoke active sessions
-        if (!action.user.isActive) {
+        // If deactivated or role changed, revoke active sessions
+        if (action.revokeSessions) {
           await tx.session.deleteMany({ where: { userId: action.id } });
         }
       }
@@ -229,7 +214,7 @@ export async function runUserSync({
     updated,
     unchanged,
     deactivated,
-    problems,
+    problems: syncProblems,
     sheetLink: sheetUrl(config),
     at,
   };

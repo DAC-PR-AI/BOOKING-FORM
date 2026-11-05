@@ -392,6 +392,9 @@ export function BookingFormEditor({
       setStatus('saving');
       const result = await saveDraft(formId, {
         ...current,
+        permanentAddress: current.sameAsCommunication
+          ? current.communicationAddress
+          : current.permanentAddress,
         secondApplicant: current.hasSecondApplicant ? current.secondApplicant : undefined,
       });
 
@@ -656,7 +659,14 @@ export function BookingFormEditor({
               <input
                 type="checkbox"
                 checked={state.sameAsCommunication}
-                onChange={(e) => patch({ sameAsCommunication: e.target.checked })}
+                onChange={(e) =>
+                  patch({
+                    sameAsCommunication: e.target.checked,
+                    ...(e.target.checked
+                      ? { permanentAddress: { ...state.communicationAddress } }
+                      : {}),
+                  })
+                }
                 className="h-4 w-4 rounded border-slate-400 text-dac-navy-700 focus:ring-dac-navy-500"
               />
               Same as communication address

@@ -63,6 +63,8 @@ const schema = z.object({
   GOOGLE_PRIVATE_KEY: z.string().optional(),
   GOOGLE_PROJECTS_SHEET_ID: z.string().optional(),
   GOOGLE_PROJECTS_SHEET_TAB: z.string().optional(),
+  GOOGLE_USERS_SHEET_ID: z.string().optional(),
+  GOOGLE_USERS_SHEET_TAB: z.string().optional(),
 });
 
 export type Env = z.infer<typeof schema>;

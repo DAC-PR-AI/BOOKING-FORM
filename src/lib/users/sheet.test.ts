@@ -40,7 +40,7 @@ describe('parseUserSheet', () => {
     expect(res.problems.length).toBe(3); // missing email, name, role
   });
 
-  it('parses valid user rows', () => {
+  it('parses valid user rows belonging to @dacdevelopers.com', () => {
     const rows = [
       ['Email', 'Name', 'Role', 'Phone', 'Status'],
       ['ragil@dacdevelopers.com', 'Ragil Immanuvel', 'ADMIN', '9876543210', 'ACTIVE'],
@@ -48,7 +48,7 @@ describe('parseUserSheet', () => {
       ['old@dacdevelopers.com', 'Old Staff', 'CRM', '', 'INACTIVE'],
     ];
 
-    const res = parseUserSheet(rows);
+    const res = parseUserSheet(rows, { allowedDomain: 'dacdevelopers.com' });
     expect(res.problems.length).toBe(0);
     expect(res.users.length).toBe(3);
 
@@ -75,17 +75,18 @@ describe('parseUserSheet', () => {
     });
   });
 
-  it('flags invalid rows and duplicates', () => {
+  it('flags invalid rows, external email domains, and duplicates', () => {
     const rows = [
       ['Email', 'Name', 'Role'],
       ['not-an-email', 'John', 'ADMIN'],
-      ['valid@dac.com', 'Jane', 'INVALID_ROLE'],
-      ['valid@dac.com', 'Duplicate Jane', 'ADMIN'],
+      ['attacker@gmail.com', 'External User', 'ADMIN'],
+      ['valid@dacdevelopers.com', 'Jane', 'INVALID_ROLE'],
+      ['valid@dacdevelopers.com', 'Duplicate Jane', 'ADMIN'],
     ];
 
-    const res = parseUserSheet(rows);
-    expect(res.problems.length).toBe(3);
+    const res = parseUserSheet(rows, { allowedDomain: 'dacdevelopers.com' });
+    expect(res.problems.length).toBe(4);
+    expect(res.problems[1]?.reason).toContain('must belong to @dacdevelopers.com');
     expect(res.users.length).toBe(0);
   });
 });
-

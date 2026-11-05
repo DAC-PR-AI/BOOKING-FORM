@@ -2,6 +2,7 @@ import 'server-only';
 import { prisma } from '@/lib/db';
 import { paiseToInputValue } from '@/lib/format/money';
 import { buildChecklist, type ChecklistSlot } from '@/lib/documents/checklist';
+import { isValidUuid } from '@/lib/documents/access';
 import type { StoredSubmitInput } from '@/lib/validation/booking-form';
 import { evaluateSubmitReadiness, type SubmitReadiness } from './submit-gate';
 
@@ -62,6 +63,7 @@ function applicantInput(row: ApplicantRow): StoredSubmitInput['firstApplicant'] 
 export type FormForGate = NonNullable<Awaited<ReturnType<typeof loadFormForGate>>>;
 
 export async function loadFormForGate(formId: string, organizationId: string) {
+  if (!isValidUuid(formId)) return null;
   return prisma.bookingForm.findFirst({
     where: { id: formId, organizationId },
     include: {

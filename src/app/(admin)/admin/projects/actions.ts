@@ -74,7 +74,9 @@ export async function createProject(
 
 export async function toggleProjectActive(formData: FormData): Promise<void> {
   const admin = await requireAdmin();
-  const id = String(formData.get('id') ?? '');
+  const parsedId = z.string().uuid().safeParse(formData.get('id') ?? '');
+  if (!parsedId.success) return;
+  const id = parsedId.data;
 
   const project = await prisma.project.findFirst({
     where: { id, organizationId: admin.organizationId },

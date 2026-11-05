@@ -74,7 +74,9 @@ const securityHeaders = [
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
   { key: 'X-DNS-Prefetch-Control', value: 'off' },
   { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
-  ...((isProduction ? [{ key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' }] : [])),
+  ...(isProduction
+    ? [{ key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' }]
+    : []),
   // Belt and braces with frame-ancestors above, for anything that still reads
   // the older header.
   { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
@@ -88,8 +90,8 @@ const nextConfig: NextConfig = {
   // linting runs as its own CI step — `npm run lint`.)
   typescript: { ignoreBuildErrors: false },
 
-  // Keep the native argon2 binding out of the client/webpack bundle.
-  serverExternalPackages: ['@node-rs/argon2'],
+  // Keep native/Node driver bindings out of the Turbopack bundle.
+  serverExternalPackages: ['@node-rs/argon2', 'pg', '@prisma/adapter-pg', '@prisma/client'],
 
   async headers() {
     return [{ source: '/:path*', headers: securityHeaders }];

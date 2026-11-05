@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { env } from '@/lib/env';
+import { verifyCronAuth } from '@/lib/auth/cron';
 import { runDigest } from '@/lib/notify/run-digest';
 
 /**
@@ -23,11 +24,14 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 export async function GET(request: Request): Promise<NextResponse> {
-  if (env.CRON_SECRET) {
-    const auth = request.headers.get('authorization');
-    if (auth !== `Bearer ${env.CRON_SECRET}`) {
-      return NextResponse.json({ ok: false }, { status: 401 });
-    }
+  if (
+    !verifyCronAuth(request.headers.get('authorization'), {
+      cronSecret: env.CRON_SECRET,
+      nodeEnv: env.NODE_ENV,
+      failClosedInProd: true,
+    })
+  ) {
+    return NextResponse.json({ ok: false }, { status: 401 });
   }
 
   const result = await runDigest();

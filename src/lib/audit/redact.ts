@@ -19,7 +19,19 @@ export const SENSITIVE_KEYS = new Set([
   'token',
   'tokenHash',
   'dob',
+  'secret',
+  'privateKey',
+  'codeVerifier',
+  'authorization',
+  'cookie',
 ]);
+
+const SENSITIVE_KEY_PATTERN =
+  /^(?:pan|pan_?(?:encrypted|last4|no|number)|a+dha+r(?:_?(?:encrypted|last4|no|number))?|password(?:_?hash)?|token(?:_?hash)?|dob|date_?of_?birth|secret|session_?secret|cron_?secret|private_?key|code_?verifier|authorization|cookie)$/i;
+
+export function isSensitiveKey(key: string): boolean {
+  return SENSITIVE_KEYS.has(key) || SENSITIVE_KEY_PATTERN.test(key);
+}
 
 export const REDACTED = '[redacted]';
 
@@ -33,7 +45,7 @@ export function redact(value: unknown): unknown {
   if (typeof value === 'object') {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-      out[k] = SENSITIVE_KEYS.has(k) ? REDACTED : redact(v);
+      out[k] = isSensitiveKey(k) ? REDACTED : redact(v);
     }
     return out;
   }

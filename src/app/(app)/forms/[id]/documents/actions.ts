@@ -2,6 +2,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
+import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { requireUser } from '@/lib/auth/rbac';
 import { audit } from '@/lib/audit/log';
@@ -64,13 +65,37 @@ function isMandatoryType(requirement: {
   return requirement.isMandatory || requirement.requiredIfSecondApplicant;
 }
 
-export async function requestDocumentUpload(input: {
+const requestUploadSchema = z.object({
+  bookingFormId: z.string().uuid('Form not found.'),
+  documentTypeId: z.string().uuid('Unknown document type.'),
+  contentType: z.string().trim().min(1).max(120),
+  sizeBytes: z.number().int().positive('That file is empty.').max(50 * 1024 * 1024),
+});
+
+const confirmUploadSchema = z.object({
+  token: z.string().trim().min(1).max(4096),
+  originalName: z.string().trim().max(255),
+  sha256: z.string().regex(/^[0-9a-f]{64}$/i).optional(),
+});
+
+const documentIdSchema = z.string().uuid();
+
+export async function requestDocumentUpload(rawInput: {
   bookingFormId: string;
   documentTypeId: string;
   contentType: string;
   sizeBytes: number;
 }): Promise<RequestUploadResult> {
   const user = await requireUser();
+
+  const parsedInput = requestUploadSchema.safeParse(rawInput);
+  if (!parsedInput.success) {
+    return {
+      ok: false,
+      error: parsedInput.error.issues[0]?.message ?? 'Invalid upload request.',
+    };
+  }
+  const input = parsedInput.data;
 
   const access = await authoriseFormAccess(user, input.bookingFormId);
   if (!access) return { ok: false, error: 'Form not found.' };
@@ -186,13 +211,19 @@ export async function requestDocumentUpload(input: {
   };
 }
 
-export async function confirmDocumentUpload(input: {
+export async function confirmDocumentUpload(rawInput: {
   token: string;
   originalName: string;
   /** Hex SHA-256 computed in the browser, for integrity. Optional. */
   sha256?: string;
 }): Promise<ConfirmUploadResult> {
   const user = await requireUser();
+
+  const parsedInput = confirmUploadSchema.safeParse(rawInput);
+  if (!parsedInput.success) {
+    return { ok: false, error: 'That upload could not be verified. Please try again.' };
+  }
+  const input = parsedInput.data;
 
   const verified = verifyUploadToken(input.token, secret());
   if (!verified.ok) {
@@ -310,6 +341,9 @@ export async function confirmDocumentUpload(input: {
 
 export async function removeDocument(documentId: string): Promise<RemoveResult> {
   const user = await requireUser();
+
+  const parsedId = documentIdSchema.safeParse(documentId);
+  if (!parsedId.success) return { ok: false, error: 'Document not found.' };
 
   const document = await prisma.formDocument.findFirst({
     where: { id: documentId },

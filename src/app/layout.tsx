@@ -7,6 +7,11 @@ export const metadata: Metadata = {
     template: '%s · DAC Booking Portal',
   },
   description: 'Booking form portal for DAC Developers Pvt Ltd.',
+  icons: {
+    icon: '/brand/dac-logo.png',
+    shortcut: '/brand/dac-logo.png',
+    apple: '/brand/dac-logo.png',
+  },
   robots: { index: false, follow: false },
 };
 

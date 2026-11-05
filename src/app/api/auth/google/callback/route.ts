@@ -1,3 +1,4 @@
+import { timingSafeEqual } from 'node:crypto';
 import { cookies, headers } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
@@ -11,11 +12,16 @@ import {
   isAllowedStaffEmail,
   OAUTH_STATE_COOKIE,
 } from '@/lib/auth/google';
-import { exactOptional } from 'zod';
 
 export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic'; ''
+export const dynamic = 'force-dynamic';
 
+function safeStateEquals(a: string, b: string): boolean {
+  const bufA = Buffer.from(a, 'utf8');
+  const bufB = Buffer.from(b, 'utf8');
+  if (bufA.length !== bufB.length) return false;
+  return timingSafeEqual(bufA, bufB);
+}
 
 function loginRedirect(errorMessage: string, nextPath?: string): NextResponse {
   const url = new URL('/login', env.APP_URL);
@@ -50,7 +56,7 @@ export async function GET(request: Request): Promise<NextResponse> {
     return loginRedirect('Invalid Google OAuth state cookie.');
   }
 
-  if (storedState.state !== state || !storedState.codeVerifier) {
+  if (!storedState.state || !safeStateEquals(storedState.state, state) || !storedState.codeVerifier) {
     return loginRedirect('Google OAuth state mismatch. Please try again.');
   }
 
@@ -66,11 +72,12 @@ export async function GET(request: Request): Promise<NextResponse> {
   const email = (profile.email || '').trim().toLowerCase();
   const domain = allowedAuthDomain();
 
-  // Strict domain enforcement: ONLY @dacdevelopers.com accounts are allowed
+  // Strict domain enforcement: ONLY verified @dacdevelopers.com Google Workspace
+  // accounts with a matching `hd` (hosted domain) claim are permitted.
   if (
-    !profile.email_verified ||
+    profile.email_verified !== true ||
     !isAllowedStaffEmail(email, { allowDevSeedDomain: false }) ||
-    (profile.hd && profile.hd.toLowerCase() !== domain)
+    profile.hd?.toLowerCase() !== domain
   ) {
     return loginRedirect(
       `Access denied: Only @${domain} Google Workspace accounts are permitted.`,
@@ -79,10 +86,27 @@ export async function GET(request: Request): Promise<NextResponse> {
   }
 
   // Look up the user and their mapped Role from the Role Master
-  const user = await prisma.user.findUnique({
-    where: { email },
-    include: { role: true },
-  });
+  // Retry once on transient connection drops (e.g. first query after laptop sleep).
+  let user;
+  try {
+    user = await prisma.user.findUnique({
+      where: { email },
+      include: { role: true },
+    });
+  } catch {
+    try {
+      user = await prisma.user.findUnique({
+        where: { email },
+        include: { role: true },
+      });
+    } catch (retryError) {
+      console.error('[auth/google] database lookup failed after retry', retryError);
+      return loginRedirect(
+        'Database connection timed out. Please try signing in again.',
+        nextPath,
+      );
+    }
+  }
 
   if (!user) {
     return loginRedirect(

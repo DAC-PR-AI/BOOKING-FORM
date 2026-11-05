@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { requireAdmin } from '@/lib/auth/rbac';
-import { hashPassword } from '@/lib/auth/password';
+import { hashPassword, MAX_PASSWORD_BYTES } from '@/lib/auth/password';
 import { destroyAllSessionsFor } from '@/lib/auth/session';
 import { allowedAuthDomain, isAllowedStaffEmail } from '@/lib/auth/google';
 import { audit } from '@/lib/audit/log';
@@ -21,7 +21,14 @@ const createUserSchema = z.object({
   email: z.string().trim().toLowerCase().email('Enter a valid email address.'),
   roleId: z.string().uuid('Select a valid role from the Role Master.'),
   phone: z.string().trim().max(20).optional(),
-  password: z.string().optional(),
+  password: z
+    .string()
+    .trim()
+    .refine(
+      (val) => val.length === 0 || (val.length >= 8 && Buffer.byteLength(val, 'utf8') <= MAX_PASSWORD_BYTES),
+      `Fallback password, when provided, must be between 8 and ${MAX_PASSWORD_BYTES} characters.`,
+    )
+    .optional(),
 });
 
 export async function createUserAndMapRole(
@@ -65,9 +72,7 @@ export async function createUserAndMapRole(
   // If no password is supplied (Google Workspace OAuth user), generate a strong
   // random password hash so the non-null column is satisfied safely.
   const rawPassword =
-    password && password.trim().length >= 8
-      ? password.trim()
-      : randomBytes(24).toString('base64url');
+    password && password.length >= 8 ? password : randomBytes(24).toString('base64url');
   const passwordHash = await hashPassword(rawPassword);
 
   const created = await prisma.user.create({
@@ -103,12 +108,27 @@ export async function createUserAndMapRole(
   };
 }
 
+const roleMappingSchema = z.object({
+  userId: z.string().uuid(),
+  roleId: z.string().uuid(),
+});
+
+const userIdSchema = z.string().uuid();
+
+const roleMasterDetailsSchema = z.object({
+  roleId: z.string().uuid(),
+  label: z.string().trim().min(2).max(80),
+  description: z.string().trim().max(240).optional(),
+});
+
 export async function updateUserRoleMapping(formData: FormData): Promise<void> {
   const admin = await requireAdmin();
-  const userId = String(formData.get('userId') ?? '');
-  const roleId = String(formData.get('roleId') ?? '');
-
-  if (!userId || !roleId) return;
+  const parsed = roleMappingSchema.safeParse({
+    userId: formData.get('userId') ?? '',
+    roleId: formData.get('roleId') ?? '',
+  });
+  if (!parsed.success) return;
+  const { userId, roleId } = parsed.data;
 
   const [targetUser, newRole] = await Promise.all([
     prisma.user.findFirst({
@@ -139,6 +159,11 @@ export async function updateUserRoleMapping(formData: FormData): Promise<void> {
     data: { roleId: newRole.id },
   });
 
+  // Invalidate active sessions when a user's role changes
+  if (targetUser.id !== admin.id) {
+    await destroyAllSessionsFor(targetUser.id);
+  }
+
   await audit({
     organizationId: admin.organizationId,
     userId: admin.id,
@@ -153,9 +178,9 @@ export async function updateUserRoleMapping(formData: FormData): Promise<void> {
 
 export async function toggleUserActive(formData: FormData): Promise<void> {
   const admin = await requireAdmin();
-  const userId = String(formData.get('userId') ?? '');
-
-  if (!userId || userId === admin.id) return;
+  const parsedId = userIdSchema.safeParse(formData.get('userId') ?? '');
+  if (!parsedId.success || parsedId.data === admin.id) return;
+  const userId = parsedId.data;
 
   const targetUser = await prisma.user.findFirst({
     where: { id: userId, organizationId: admin.organizationId },
@@ -186,13 +211,25 @@ export async function toggleUserActive(formData: FormData): Promise<void> {
   revalidatePath('/admin/users');
 }
 
+/**
+ * Update display label and description for a role in Role Master.
+ *
+ * Architecture Note (Single-Tenant Scope):
+ * Roles are currently a global Role Master (`Role` model in prisma/schema.prisma has
+ * no `organizationId` and role `name` is globally unique). This application operates
+ * as a single-tenant deployment. If multi-tenancy is onboarded in the future, role
+ * labels/descriptions must move to a per-organization override table rather than
+ * mutating the global Role record directly.
+ */
 export async function updateRoleMasterDetails(formData: FormData): Promise<void> {
   const admin = await requireAdmin();
-  const roleId = String(formData.get('roleId') ?? '');
-  const label = String(formData.get('label') ?? '').trim();
-  const description = String(formData.get('description') ?? '').trim();
-
-  if (!roleId || label.length < 2) return;
+  const parsed = roleMasterDetailsSchema.safeParse({
+    roleId: formData.get('roleId') ?? '',
+    label: formData.get('label') ?? '',
+    description: (formData.get('description') as string) || undefined,
+  });
+  if (!parsed.success) return;
+  const { roleId, label, description } = parsed.data;
 
   const existing = await prisma.role.findUnique({ where: { id: roleId } });
   if (!existing) return;
@@ -200,8 +237,8 @@ export async function updateRoleMasterDetails(formData: FormData): Promise<void>
   const updated = await prisma.role.update({
     where: { id: existing.id },
     data: {
-      label: label.slice(0, 80),
-      description: description ? description.slice(0, 240) : null,
+      label,
+      description: description || null,
     },
   });
 
@@ -216,4 +253,3 @@ export async function updateRoleMasterDetails(formData: FormData): Promise<void>
 
   revalidatePath('/admin/users');
 }
-
